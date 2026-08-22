@@ -4,7 +4,7 @@
 | 文档版本 | V1.0 | 编制日期 | 2026-08-22 |
 | :--- | :--- | :--- | :--- |
 | 项目名称 | InsightX | 适用阶段 | 比赛初赛/复赛 & MVP 研发 |
-| 技术栈 | Next.js 16 + FastAPI + LangGraph + PostgreSQL/pgvector + Redis | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
+| 技术栈 | Next.js 16 (React 19) + FastAPI 0.141 + LangGraph 1.2 + PostgreSQL 18 / pgvector 0.8 + Redis 8 | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
 
 ---
 
@@ -73,11 +73,11 @@
   3. 前端以双栏卡片对照形式清晰展示。
 
 [P0-04] 交互式洞察大盘与任务流看板 (Dashboard)
-- 描述：统一的 Next.js 16 Web 界面，展示任务执行进度、核心指标卡片、差评痛点分布图表及改款决策报告。
+- 描述：统一的 Next.js 16 (React 19 + TailwindCSS 4) Web 界面，展示任务执行进度、核心指标卡片、差评痛点分布图表及改款决策报告。
 - 用户故事：As a 决策者, I want to 在一个页面总览所有监控 ASIN 的关键指标与诊断结果, So that 快速评估竞品态势。
 - 验收标准：
   1. 包含核心 KPI 卡片（平均星级、差评率、改款潜力指数、预测 FBA 节约额）。
-  2. 集成 ECharts 差评痛点分布柱状/雷达图。
+  2. 集成 ECharts 6 差评痛点分布柱状/雷达图。
   3. 支持 SSE 流式展示 Agent 运行节点状态。
 ```
 
@@ -204,7 +204,7 @@ InsightX 平台架构
 - **页面定位**：把控商业合理性，防止盲目开模与高危立项。
 - **布局要点**：
   1. **财务参数调节滑块**：用户可动态拖动开模预算、打样成本、首批 MOQ、预期售价、当前海运单价。
-  2. **动态盈亏平衡与敏感度曲线**：ECharts 动态展示不同退货率降低幅度下的投资回收期（Payback Period）。
+  2. **动态盈亏平衡与敏感度曲线**：ECharts 6 动态展示不同退货率降低幅度下的投资回收期（Payback Period）。
   3. **熔断决议状态区 (Veto Banner)**：
      - **PASSED（绿灯）**：方案财务指标健康，ROI >= 预期门槛。
      - **VETOED（红灯熔断）**：显示醒目熔断警示标签，给出明确劝退理由（如：“开模回收期长达 14 个月，已超出该品类 6 个月生命周期”），并自动给出免开模的替代建议。
@@ -218,9 +218,9 @@ InsightX 平台架构
 sequenceDiagram
     autonumber
     actor User as 卖家/产品经理
-    participant Web as Next.js 16 (BFF)
-    participant Core as FastAPI + LangGraph
-    participant Store as PostgreSQL + pgvector
+    participant Web as Next.js 16 / React 19 (BFF)
+    participant Core as FastAPI 0.141 + LangGraph 1.2
+    participant Store as PostgreSQL 18 + pgvector 0.8
     participant AI as Claude 3.7 / bge-m3 / Vision
     
     User->>Web: 提交竞品 ASIN + 成本参数
@@ -310,7 +310,7 @@ class InsightState(TypedDict):
 |    及严重度评分。                   |    与开模供应链周期动态熔断。        |
 | 4. 双栏改款建议：生成本体优化与包装  | 4. 历史时间切片回测验证系统与吻合度  |
 |    优化结构化方案。                 |    得分计算。                      |
-| 5. 可视化大盘：Next.js 16 看板展示   | 5. 供应链信号与原材料海运波动预警。  |
+| 5. 可视化大盘：Next.js 16 看板展示 (ECharts 6) | 5. 供应链信号与原材料海运波动预警。  |
 |    及 SSE 节点推进流。             | 6. 自动化导出专业级工程改款 RFC     |
 | 6. 基础证据溯源：卡片关联原始评论。   |    (PDF/Word)。                    |
 +------------------------------------+------------------------------------+
@@ -323,7 +323,7 @@ class InsightState(TypedDict):
 | 阶段 | 周期 | 核心里程碑交付物 | 关键责任模块 |
 | :--- | :--- | :--- | :--- |
 | **M1: 架构与原型搭设** | 第 1 周 (Day 1-7) | • Monorepo 仓库初始化<br>• PostgreSQL/pgvector 数据库表结构初始化<br>• Next.js 16 UI 框架与 Dashboard 原型搭建 | 全员 / 前端 |
-| **M2: P0 核心数据与算法闭环** | 第 2 周 (Day 8-14) | • Amazon 评论抓取与清洗管道联通<br>• bge-m3 向量化与 pgvector HNSW 检索跑通<br>• LangGraph 双栏改款 Agent 生成测试通过 | 后端 / AI 核心 |
+| **M2: P0 核心数据与算法闭环** | 第 2 周 (Day 8-14) | • Amazon 评论抓取与清洗管道联通<br>• bge-m3 向量化与 pgvector (HNSW) 检索跑通<br>• LangGraph 1.2 双栏改款 Agent 生成测试通过 | 后端 / AI 核心 |
 | **M3: 前后端联调与初赛交付** | 第 3 周 (Day 15-21) | • Next.js BFF 与 FastAPI SSE 状态流透传<br>• 双栏决策看板 + 证据链抽屉交互联调<br>• **完成初赛 Demo 录屏与申报材料提交** | 全员 |
 | **M4: P1 多模态与财务风控增强** | 第 4 周 (Day 22-28) | • 接入 Claude Vision 买家实拍图缺陷解析<br>• 财务否决熔断逻辑与抛重降阶算法上线<br>• 证据反向穿透交互完善 | AI 核心 / 后端 |
 | **M5: P2 回测体系与多平台扩展** | 第 5 周 (Day 29-35) | • 接入 TikTok/Temu 样本数据<br>• 历史时间切片回测验证模块交付<br>• 性能调优与压测 | 全员 |
