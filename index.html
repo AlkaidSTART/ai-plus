@@ -3,287 +3,838 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="color-scheme" content="light">
-<title>AI智能营销 · 产品架构备忘</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<title>InsightX · 全球跨境电商 AI 市场洞察与动态决策系统</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 <style>
-:root{
-  --paper:#F1F1EC;
-  --ink:#16181A;
-  --sub:#5B5F60;
-  --line:#D6D5CB;
-  --accent:#A9291C;
-}
-*{box-sizing:border-box;}
-body{
-  margin:0;
-  background:var(--paper);
-  color:var(--ink);
-  font-family:'Noto Sans SC',-apple-system,sans-serif;
-  line-height:1.7;
-  -webkit-font-smoothing:antialiased;
-}
-.wrap{max-width:900px;margin:0 auto;padding:0 24px 100px;}
-
-.topbar{
-  display:flex;flex-wrap:wrap;gap:10px;
-  justify-content:space-between;align-items:center;
-  padding:18px 0;border-bottom:1px solid var(--line);
-  font-family:'IBM Plex Mono',monospace;font-size:11px;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--sub);
-}
-.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:7px;animation:pulse 2s ease-in-out infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-
-.hero{padding:52px 0 8px;}
-.hero .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin-bottom:16px;}
-.hero h1{font-size:clamp(26px,4.6vw,42px);font-weight:900;line-height:1.4;letter-spacing:-.01em;margin:0 0 20px;max-width:15ch;}
-.hero .lead{font-size:16px;color:var(--sub);max-width:620px;line-height:1.85;margin:0;}
-
-.block{padding-top:52px;margin-top:52px;border-top:1px solid var(--line);}
-.block .eyebrow{display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin-bottom:12px;}
-.block .eyebrow::before{content:'';width:6px;height:6px;background:var(--accent);flex-shrink:0;}
-.block h2{font-size:23px;font-weight:700;margin:0 0 22px;letter-spacing:-.01em;}
-.block .intro{font-size:14.5px;color:var(--sub);max-width:640px;margin:-8px 0 26px;line-height:1.8;}
-
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
-
-.issue{border-left:3px solid var(--accent);padding:5px 0 22px 16px;}
-.issue h3{font-size:15px;font-weight:700;margin:0 0 5px;}
-.issue p{font-size:13.5px;color:var(--sub);margin:0;line-height:1.7;}
-
-.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;transition:border-color .2s;}
-.card:hover{border-color:var(--accent);}
-.card .tag{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;}
-.card h3{font-size:15.5px;font-weight:700;margin:0 0 12px;}
-.card ul{margin:0;padding-left:16px;font-size:13.3px;color:var(--ink);}
-.card li{margin-bottom:7px;line-height:1.6;}
-.card li:last-child{margin-bottom:0;}
-
-.diagram-wrap{overflow-x:auto;margin:8px 0 30px;padding-bottom:6px;-webkit-overflow-scrolling:touch;}
-.diagram-wrap svg{width:100%;min-width:640px;height:auto;display:block;}
-.svg-node{fill:#fff;stroke:var(--ink);stroke-width:1.4;}
-.svg-ink-stroke{stroke:var(--ink);stroke-width:1.4;fill:none;}
-.svg-ink-fill{fill:var(--ink);}
-.svg-sub-fill{fill:var(--sub);}
-.svg-accent-fill{fill:var(--accent);}
-.svg-cjk{font-family:'Noto Sans SC',sans-serif;}
-.svg-mono{font-family:'IBM Plex Mono',monospace;}
-.flow-return{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 6;animation:flow 1.3s linear infinite;}
-@keyframes flow{to{stroke-dashoffset:-24;}}
-@media(prefers-reduced-motion:reduce){.pulse-dot,.flow-return{animation:none;}}
-
-.tablewrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:520px;}
-th{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);text-align:left;padding:0 14px 10px 0;border-bottom:1.5px solid var(--ink);font-weight:500;}
-td{padding:15px 14px 15px 0;border-bottom:1px solid var(--line);vertical-align:top;}
-td:first-child{font-weight:700;white-space:nowrap;}
-td:nth-child(2){font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;white-space:nowrap;}
-td:nth-child(3){color:var(--sub);}
-
-.stat{border-top:2px solid var(--ink);padding-top:12px;}
-.stat .label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);margin-bottom:7px;font-weight:600;}
-.stat .desc{font-size:13px;color:var(--sub);line-height:1.6;}
-
-.steps{list-style:none;margin:0;padding:0;}
-.step{display:flex;gap:18px;padding:22px 0;border-bottom:1px solid var(--line);align-items:flex-start;}
-.step:last-child{border-bottom:none;}
-.step .num{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--accent);min-width:32px;}
-.step h3{margin:0 0 5px;font-size:15px;font-weight:700;}
-.step p{margin:0;font-size:13.5px;color:var(--sub);line-height:1.6;}
-
-footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;}
-
-@media(max-width:720px){
-  .grid-2,.grid-3{grid-template-columns:1fr;}
-  .grid-4{grid-template-columns:repeat(2,1fr);}
-  .issue{padding-bottom:18px;}
-}
-@media(max-width:460px){
-  .grid-4{grid-template-columns:1fr;}
-}
+  :root {
+    --bg-main: #09090b;
+    --bg-card: #18181b;
+    --bg-card-soft: #27272a;
+    --border-color: rgba(255,255,255,0.08);
+    --border-accent: rgba(255,255,255,0.12);
+    --text-primary: #e8eaed;
+    --text-secondary: rgba(230,232,239,0.45);
+    --text-muted: rgba(230,232,239,0.25);
+    --accent-amber: #3b82f6;
+    --accent-amber-hover: #2563eb;
+    --accent-rose: #f43f5e;
+    --accent-emerald: #10b981;
+    --accent-cyan: #22d3ee;
+    --state-voided: #f87171;
+    --state-passed: #34d399;
+  }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.1);
+  }
+  ::selection {
+    background: rgba(59,130,246,0.3);
+    color: var(--bg-main);
+  }
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .glass {
+    background: rgba(17, 20, 28, 0.55);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: all 0.2s ease;
+  }
+  .glass:hover {
+    border-color: var(--border-accent);
+    background: rgba(17, 20, 28, 0.7);
+  }
+  .glass:focus-within {
+    border-color: var(--accent-amber);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+  .gradient-border {
+    border-image: linear-gradient(147deg, rgba(255,255,255,0.08), transparent) 1;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-amber);
+    box-shadow: 0 0 0 0 rgba(59,130,246,0.6);
+    animation: pulse 2s infinite ease-out;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(59,130,246,0); }
+    100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6); }
+  }
+  .fade-in-up {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fade-in-up.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .fade-in-stagger > * { opacity: 1; transform: translateY(0); }
+  .fade-in-stagger.visible > * {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .hover-lift {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .active-lift:active {
+    transform: translateY(1px);
+  }
+  .nav-indicator {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    height: 3px;
+    background: var(--accent-amber);
+    width: 0;
+    transform: translateX(-50%);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .nav-item:hover .nav-indicator,
+  .nav-item.active .nav-indicator {
+    width: 100%;
+  }
+  .nav-badge {
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+  }
+  .nav-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Professional card hover states */
+  .card-pro {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-pro:hover {
+    border-color: var(--border-accent);
+    background: rgba(17, 20, 28, 0.75);
+    transform: translateY(-1px);
+  }
+  .card-pro:active {
+    transform: translateY(0);
+  }
+  .log-line {
+    animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 9999px;
+    border: 1px solid var(--border-color);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+  .chip:hover {
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.06);
+  }
+  .chip.selected {
+    border-color: rgba(59,130,246,0.35);
+    color: var(--accent-amber);
+    background: rgba(59,130,246,0.08);
+  }
+  .voc-card { cursor: pointer; min-height: auto; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease; }
+  .voc-card[aria-hidden='true'] { display: none; }
+  .voc-card:hover { transform: translateY(-2px); }
+  .hover-scale { transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease; }
+  .hover-scale:hover { transform: translateY(-1px) scale(1.01); }
+  .stagger-1 > * { opacity: 0; transform: translateY(12px); }
+  .stagger-1 > *.visible { opacity: 1; transform: translateY(0); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  /* Tablet optimizations */
+  @media (max-width: 768px) {
+    .grid-cols-4 { grid-template-columns: repeat(2, 1fr) !important; }
+    .grid-cols-2 { grid-template-columns: 1fr !important; }
+  }
 </style>
+<script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
-<div class="wrap">
+<body class="min-h-screen">
 
-  <div class="topbar">
-    <span>AI-MKT · 产品架构备忘</span>
-    <span><span class="pulse-dot"></span>ALWAYS ON · 持续运行</span>
+<!-- Header -->
+<header class="sticky top-0 z-50 border-b border-white/5 bg-[#0b0e14]/80 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-4">
+    <div class="relative">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-500 flex items-center justify-center font-extrabold text-sm shadow-[0_0_15px_-3px_rgba(59,130,246,0.5)]">IX</div>
+      <div class="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 opacity-20 blur-md -z-1"></div>
+    </div>
+    <div>
+      <h1 class="text-xl font-extrabold tracking-tight text-white">InsightX</h1>
+      <p class="text-xs text-white/30 font-light" data-i18n="subTitle">全球跨境电商 AI 市场洞察与动态决策系统</p>
+    </div>
   </div>
-
-  <div class="hero">
-    <div class="eyebrow">跨境电商 · CROSS-BORDER GROWTH</div>
-    <h1>AI智能营销：内容 × 红人 × 投流，闭环增长引擎</h1>
-    <p class="lead">真正交付的不是三套AI能力，而是一套从商品出发、以成交为目标、持续自我修正的全域增长系统。</p>
+  <div class="flex items-center gap-4">
+    <nav class="hidden md:flex gap-1 text-sm text-white/40 font-medium">
+      <a href="#dashboard" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+        <span class="nav-indicator"></span>
+        <i data-lucide="layout-dashboard" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span class="relative" data-i18n="navDashboard">战略大盘</span>
+        
+      </a>
+      <a href="#radar" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+        <span class="nav-indicator"></span>
+        <i data-lucide="radar" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span class="relative" data-i18n="navRadar">竞品雷达</span>
+        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded-full border border-blue-500/30" data-i18n="badgeMonitoring">2监测</span>
+      </a>
+      <a href="#voc" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+        <span class="nav-indicator"></span>
+        <i data-lucide="message-square-text" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span class="relative" data-i18n="navVoc">评论洞察</span>
+        <span class="nav-badge ml-1.5 px-1.5 py-0.5 text-[10px] bg-rose-500/20 text-rose-400 rounded-full border border-rose-500/30">42 痛点</span>
+      </a>
+      <a href="#reform" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+        <span class="nav-indicator"></span>
+        <i data-lucide="hammer" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span class="relative" data-i18n="navReform">改款决策</span>
+      </a>
+      <a href="#finance" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+        <span class="nav-indicator"></span>
+        <i data-lucide="shield-alert" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span class="relative" data-i18n="navFinance">财务风控</span>
+      </a>
+    </nav>
+    <div class="flex items-center glass rounded-xl p-1 border border-white/10 text-xs">
+      <button id="langZh" onclick="setLang('zh')" class="px-2.5 py-1 rounded-lg font-medium transition text-blue-300 bg-white/10" aria-label="中文">中</button>
+      <button id="langEn" onclick="setLang('en')" class="px-2.5 py-1 rounded-lg font-medium transition text-white/50 hover:text-white" aria-label="English">EN</button>
+    </div>
   </div>
+</header>
 
-  <div class="block">
-    <div class="eyebrow">PRODUCT · 产品判断</div>
-    <h2>不是再做一个AI工具，而是重构营销作业流</h2>
-    <p class="intro">产品核心不是“生成更多”，而是让商品从一次上架开始，自动进入内容、红人、投流三个增长动作，并由成交结果反向决定下一轮资源分配。</p>
-    <div class="grid-3">
-      <div class="card">
-        <span class="tag">01 · OBJECT</span>
-        <h3>先统一增长对象</h3>
-        <ul><li>以“商品 / SKU”为最小业务单元，串起素材、KOL、Campaign、订单与效果数据</li><li>所有AI动作围绕同一商品上下文执行，避免工具孤岛</li></ul>
+<main class="max-w-7xl mx-auto px-6 py-10 space-y-12 overflow-x-hidden">
+
+<!-- 1. Dashboard -->
+<section id="dashboard" class="space-y-8 fade-in-up">
+  <div class="flex items-end justify-between">
+    <div><h2 class="text-3xl font-extrabold tracking-tight" data-i18n="dashTitle">战略决策大盘</h2><p class="text-white/40 text-sm mt-1" data-i18n="dashSub">实时Agent执行流 · 全局体检状态</p></div>
+    <button id="taskBtn" onclick="startMockTask()" class="glass px-6 py-3 rounded-xl text-sm font-bold text-white hover:text-blue-400 transition hover-scale border border-white/10 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50">
+      <span class="flex items-center gap-2">
+        <i data-lucide="play" class="w-4 h-4"></i>
+        <span data-i18n="taskBtn">触发分析任务</span>
+      </span>
+    </button>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-1">
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="flex items-center gap-2 text-xs text-white/30 uppercase tracking-widest font-semibold"><i data-lucide="box" class="w-4 h-4"></i><span data-i18n="kpiAsin">监控 ASIN</span></div>
+      <div class="text-3xl font-extrabold mt-2 text-white">42</div>
+      <div class="text-xs text-blue-400 mt-1" data-i18n="kpiAsinDelta">+3 今日新增</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="flex items-center gap-2 text-xs text-white/30 uppercase tracking-widest"><i data-lucide="brain-circuit" class="w-4 h-4"></i><span data-i18n="kpiVoc">痛点聚类</span></div>
+      <div class="text-3xl font-extrabold mt-2 text-white">7</div>
+      <div class="text-xs text-rose-400 mt-1" data-i18n="kpiVocDelta">3 个高危</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="flex items-center gap-2 text-xs text-white/30 uppercase tracking-widest"><i data-lucide="trending-up" class="w-4 h-4"></i><span data-i18n="kpiReform">潜力改款</span></div>
+      <div class="text-3xl font-extrabold mt-2 text-white">$48.2K</div>
+      <div class="text-xs text-emerald-400 mt-1" data-i18n="kpiReformDelta">预估 FBA 节省</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="flex items-center gap-2 text-xs text-white/30 uppercase tracking-widest"><i data-lucide="alert-triangle" class="w-4 h-4"></i><span data-i18n="kpiFinance">熔断警告</span></div>
+      <div class="text-3xl font-extrabold mt-2 text-white">2</div>
+      <div class="text-xs text-rose-400 mt-1" data-i18n="kpiFinanceDelta">待决策者处理</div>
+    </div>
+  </div>
+  <div id="taskStream" class="glass rounded-2xl border border-white/5 p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div id="taskDot" class="pulse-dot"></div>
+        <span class="text-sm font-bold" data-i18n="agentStreamTitle">Agent 执行流</span>
+        <span id="taskStatus" class="text-xs text-white/40" data-i18n="agentStreamIdle">点击触发分析任务，观察抓取、视觉质检与决策回测链路</span>
       </div>
-      <div class="card">
-        <span class="tag">02 · AI ROLE</span>
-        <h3>AI负责判断，不只是生成</h3>
-        <ul><li>生成负责提效，推荐负责选择，Agent负责执行，数据负责纠偏</li><li>高风险动作保留人工审批，成熟后再逐步自动化</li></ul>
-      </div>
-      <div class="card">
-        <span class="tag">03 · MVP</span>
-        <h3>先跑通一个增长闭环</h3>
-        <ul><li>优先选择1个商品 + 2个渠道 + 1类KOL，验证“素材→投放→成交→复用”</li><li>先证明ROI提升，再扩平台、扩国家、扩自动化程度</li></ul>
-      </div>
+      <button onclick="stopMockTask()" class="text-xs text-white/40 hover:text-white transition border border-white/10 px-3 py-1 rounded-lg" data-i18n="stopTaskBtn">停止任务</button>
     </div>
+    <div id="streamLogs" class="max-h-56 overflow-y-auto space-y-2 pr-1"></div>
   </div>
+</section>
 
-  <div class="block">
-    <div class="eyebrow">LOOP · 核心回路</div>
-    <h2>数据回流，才决定AI有没有越用越强</h2>
-    <div class="grid-4">
-      <div class="stat"><span class="label">内容 → 投放</span><div class="desc">CTR / CVR高的素材进入更多预算与相似人群</div></div>
-      <div class="stat"><span class="label">红人 → 内容</span><div class="desc">高转化KOL反向沉淀选题、脚本与人设特征</div></div>
-      <div class="stat"><span class="label">投放 → 预算</span><div class="desc">ROAS、CPA、边际回报驱动跨渠道动态调仓</div></div>
-      <div class="stat"><span class="label">成交 → 策略</span><div class="desc">最终以订单利润，而不是曝光量，作为优化目标</div></div>
-    </div>
+<!-- 2. Competitor Radar -->
+<section id="radar" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight" data-i18n="radarTitle">竞品时序监控</h2>
+    <div class="text-xs text-white/30" data-i18n="radarSub">实时价格波动 · BSR 趋势</div>
   </div>
+  <div id="radarChart" class="h-72 glass rounded-2xl p-2 hover-scale transition"></div>
+</section>
 
-  <div class="block">
-    <div class="eyebrow">BOTTLENECK · 断点</div>
-    <h2>四个断点，是当前的现实</h2>
-    <div class="grid-2">
-      <div class="issue"><h3>内容跟不上投放节奏</h3><p>平台规格各异（时长/比例/文案长度），人工产出速度是硬瓶颈</p></div>
-      <div class="issue"><h3>红人筛选全凭经验</h3><p>匹配、触达、跟进靠人力，转化率低、周期长、难以规模化</p></div>
-      <div class="issue"><h3>预算分配靠拍脑袋</h3><p>渠道分散、出价策略各自为政，无法根据实时效果校准</p></div>
-      <div class="issue"><h3>三段数据互不打通</h3><p>内容表现、红人转化、广告ROI各自为战，无法反哺彼此</p></div>
-    </div>
+<!-- 3. VOC & Vision -->
+<section id="voc" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight" data-i18n="vocTitle">多模态评论洞察</h2>
+    <div class="text-xs text-white/30" data-i18n="vocSub">买家实拍图视觉取证 · 痛点聚类分布</div>
   </div>
-
-  <div class="block">
-    <div class="eyebrow">ARCHITECTURE · 三引擎闭环</div>
-    <h2>三引擎 + 一条回流数据线</h2>
-    <p class="intro">单点提效只是工具；把三段效果数据接进同一个回路、让系统持续自我修正，才是"增长引擎"和"工具箱"的区别。</p>
-
-    <div class="diagram-wrap">
-      <svg viewBox="0 0 820 250" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 Z" class="svg-accent-fill"/>
-          </marker>
-        </defs>
-
-        <rect x="20" y="20" width="200" height="64" rx="8" class="svg-node"/>
-        <text x="120" y="50" text-anchor="middle" class="svg-cjk svg-ink-fill" font-size="15" font-weight="700">内容生成引擎</text>
-        <text x="120" y="68" text-anchor="middle" class="svg-mono svg-accent-fill" font-size="9" letter-spacing="1">CONTENT</text>
-
-        <rect x="310" y="20" width="200" height="64" rx="8" class="svg-node"/>
-        <text x="410" y="50" text-anchor="middle" class="svg-cjk svg-ink-fill" font-size="15" font-weight="700">红人营销引擎</text>
-        <text x="410" y="68" text-anchor="middle" class="svg-mono svg-accent-fill" font-size="9" letter-spacing="1">INFLUENCER</text>
-
-        <rect x="600" y="20" width="200" height="64" rx="8" class="svg-node"/>
-        <text x="700" y="50" text-anchor="middle" class="svg-cjk svg-ink-fill" font-size="15" font-weight="700">智能投放引擎</text>
-        <text x="700" y="68" text-anchor="middle" class="svg-mono svg-accent-fill" font-size="9" letter-spacing="1">MEDIA BUY</text>
-
-        <line x1="222" y1="52" x2="306" y2="52" class="svg-ink-stroke" marker-end="url(#arrow)"/>
-        <line x1="512" y1="52" x2="596" y2="52" class="svg-ink-stroke" marker-end="url(#arrow)"/>
-
-        <path d="M700,84 C700,190 120,190 120,84" class="flow-return" marker-end="url(#arrow)"/>
-        <text x="410" y="215" text-anchor="middle" class="svg-mono svg-sub-fill" font-size="11" letter-spacing=".5">数据回流 · 驱动下一轮迭代</text>
-      </svg>
-    </div>
-
-    <div class="grid-3">
-      <div class="card">
-        <span class="tag">CONTENT ENGINE</span>
-        <h3>内容生成引擎</h3>
-        <ul>
-          <li>按TikTok / Instagram / YouTube / Google / Meta各自规格自动适配时长、比例、文案长度，一次输入多端产出</li>
-          <li>结构化输出（不同渠道走不同schema）保证格式可控</li>
-          <li>检索历史高转化素材做风格约束，守住品牌调性</li>
-        </ul>
+  <div class="grid md:grid-cols-3 gap-6">
+    <div class="md:col-span-1 space-y-4">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="filterVoc('all')" class="chip selected" data-filter="all"><span data-i18n="filterAll">全部</span></button>
+        <button onclick="filterVoc('critical')" class="chip" data-filter="critical"><span data-i18n="filterCritical">高危</span></button>
+        <button onclick="filterVoc('moderate')" class="chip" data-filter="moderate"><span data-i18n="filterModerate">中危</span></button>
+        <button onclick="filterVoc('minor')" class="chip" data-filter="minor"><span data-i18n="filterMinor">低危</span></button>
       </div>
-      <div class="card">
-        <span class="tag">INFLUENCER ENGINE</span>
-        <h3>红人营销引擎</h3>
-        <ul>
-          <li>按粉丝画像、历史带货数据、内容调性打分匹配，替代人工海选</li>
-          <li>自动生成个性化触达文案与跟进节奏，跟踪合作状态</li>
-          <li>冷启动阶段数据薄弱，前期仍需人工规则兜底</li>
-        </ul>
+      <div class="glass p-4 rounded-xl border border-rose-400/20 hover:border-rose-400/40 transition hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">把手断裂</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 42 次 · 严重度 4.8</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“把手直接断裂，承重不良”</p>
       </div>
-      <div class="card">
-        <span class="tag">MEDIA BUY ENGINE</span>
-        <h3>智能投放引擎</h3>
-        <ul>
-          <li>跨渠道预算动态再分配，依据实时ROAS调仓而非固定切分</li>
-          <li>对接各平台自带智能出价能力做二次调度，不重复造轮子</li>
-          <li>前提是统一转化跟踪层，否则跨平台归因会失真</li>
-        </ul>
+      <div class="glass p-4 rounded-xl border border-blue-400/20 hover:border-blue-400/40 transition hover-scale voc-card" data-severity="moderate">
+        <div class="flex items-center justify-between">
+          <h4 class="text-blue-300 font-bold">外壳色差</h4>
+          <span class="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-full">MODERATE</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 28 次 · 严重度 3.9</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“颜色不一致，看起来质料差”</p>
+      </div>
+      <div class="glass p-4 rounded-xl border border-white/5 hover:border-white/20 transition hover-scale voc-card" data-severity="minor">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold">尺寸偏码</h4>
+          <span class="text-xs px-2 py-0.5 bg-white/10 text-white/60 rounded-full">MINOR</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 15 次 · 严重度 3.2</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“戴上头小脚趾疼”</p>
       </div>
     </div>
-  </div>
-
-  <div class="block">
-    <div class="eyebrow">STACK · 技术选型</div>
-    <h2>落地选型</h2>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>层</th><th>选型</th><th>说明</th></tr></thead>
-        <tbody>
-          <tr><td>生成层</td><td>Vercel AI SDK</td><td>generateObject / Output.object 按渠道schema产出结构化素材，generateImage对接图片生成provider</td></tr>
-          <tr><td>数据层</td><td>Supabase</td><td>Postgres + pgvector，素材库/红人库/效果数据统一存储，向量检索做风格与人设匹配</td></tr>
-          <tr><td>投放层</td><td>Google/Meta/TikTok API</td><td>对接各平台原生出价能力，系统层做跨渠道预算调度</td></tr>
-          <tr><td>应用层</td><td>Next.js</td><td>投放决策看板与人工复核界面</td></tr>
-        </tbody>
-      </table>
+    <div class="md:col-span-2 grid grid-cols-2 gap-3" id="vocs">
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">包装破损</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 23 次 · 严重度 4.3</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“开箱即发现配件挤压变形”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="moderate">
+        <div class="flex items-center justify-between">
+          <h4 class="text-blue-300 font-bold">说明书不清</h4>
+          <span class="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-full">MODERATE</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 19 次 · 严重度 3.6</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“步骤缺图，安装过程混乱”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="minor">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold">配件遗漏</h4>
+          <span class="text-xs px-2 py-0.5 bg-white/10 text-white/60 rounded-full">MINOR</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 12 次 · 严重度 3.1</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“缺少备用垫片，无法完整组装”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">续航虚标</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 16 次 · 严重度 4.5</p>
+        <p class="text-xs text-white/50 mt-1 ">典型：“重度使用下续航明显低于宣传”</p>
+      </button>
     </div>
   </div>
+</section>
 
-  <div class="block">
-    <div class="eyebrow">METRICS · 关注指标</div>
-    <h2>关注的不是产出量，是回路效率</h2>
-    <div class="grid-4">
-      <div class="stat"><span class="label">内容产出效率</span><div class="desc">条 / 人天，衡量规模化速度</div></div>
-      <div class="stat"><span class="label">KOL转化率</span><div class="desc">触达到成交占比，衡量匹配精度</div></div>
-      <div class="stat"><span class="label">跨渠道ROAS</span><div class="desc">统一口径衡量投放效率</div></div>
-      <div class="stat"><span class="label">归因覆盖率</span><div class="desc">可追踪成交占比，衡量回路是否健康</div></div>
+<!-- 4. Reformulation (双栏) -->
+<section id="reform" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight" data-i18n="reformTitle">工厂级双栏改款决策</h2>
+    <div class="flex gap-2 text-xs text-white/30">
+      <span class="px-2 py-0.5 rounded bg-blue-400/10 text-blue-300" data-i18n="reformTagBody">本体优化</span>
+      <span class="px-2 py-0.5 rounded bg-rose-400/10 text-rose-300" data-i18n="reformTagPkg">包装履约</span>
     </div>
   </div>
-
-  <div class="block">
-    <div class="eyebrow">RISK · 风险清单</div>
-    <h2>落地前要看清的坑</h2>
-    <div class="grid-2">
-      <div class="issue"><h3>平台合规</h3><p>AI生成内容、自动化触达可能触发平台政策审核，甚至封号</p></div>
-      <div class="issue"><h3>数据出境</h3><p>出海团队需评估数据留存与跨境传输的合规要求</p></div>
-      <div class="issue"><h3>品牌一致性</h3><p>批量生成一旦失控，全渠道素材"一眼AI"，反而拉低转化</p></div>
-      <div class="issue"><h3>三方依赖</h3><p>投放与触达依赖平台API的稳定性和限流策略，需要降级预案</p></div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="glass p-6 rounded-2xl border border-blue-400/20 hover:border-blue-400/40 hover-scale transition">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+        <h3 class="font-extrabold text-blue-300 text-sm uppercase tracking-widest" data-i18n="reformBodyTitle">产品本体优化</h3>
+      </div>
+      <ul class="space-y-3 text-sm text-white/80">
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60" data-i18n="reformMaterialLabel">材质替换</span>
+          <span class="text-blue-400 font-medium" data-i18n="reformMaterialVal">ABS → 阻燃 PC</span>
+        </li>
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60" data-i18n="reformMoldCountLabel">开模费用</span>
+          <span class="text-white">$3,200</span>
+        </li>
+        <li class="flex justify-between py-2">
+          <span class="text-white/60" data-i18n="reformDefectLabel">预计缺陷率降低</span>
+          <span class="text-emerald-400 font-medium">-42%</span>
+        </li>
+      </ul>
+    </div>
+    <div class="glass p-6 rounded-2xl border border-rose-400/20 hover:border-rose-400/40 hover-scale transition">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-rose-400"></div>
+        <h3 class="font-extrabold text-rose-300 text-sm uppercase tracking-widest" data-i18n="reformPkgTitle">包装与履约优化</h3>
+      </div>
+      <ul class="space-y-3 text-sm text-white/80">
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60" data-i18n="reformTierLabel">外箱尺寸降阶</span>
+          <span class="text-rose-400 font-medium">Tier Down</span>
+        </li>
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60" data-i18n="reformFreightLabel">单件运费节省</span>
+          <span class="text-emerald-400 font-medium">$0.85</span>
+        </li>
+        <li class="flex justify-between py-2">
+          <span class="text-white/60" data-i18n="reformWeightLabel">抛重优化 ↓</span>
+          <span class="text-white">-18%</span>
+        </li>
+      </ul>
     </div>
   </div>
+</section>
 
-  <div class="block">
-    <div class="eyebrow">SEQUENCE · 建设顺序</div>
-    <h2>先做什么</h2>
-    <ol class="steps">
-      <li class="step"><span class="num">1</span><div><h3>内容生成引擎</h3><p>技术门槛最可控，团队已有Vercel AI SDK经验，优先跑通</p></div></li>
-      <li class="step"><span class="num">2</span><div><h3>智能投放引擎</h3><p>对接平台原生出价做预算调度层，验证数据回流机制是否有效</p></div></li>
-      <li class="step"><span class="num">3</span><div><h3>红人营销引擎</h3><p>冷启动依赖数据积累，前期用人工+半自动过渡</p></div></li>
-    </ol>
+<!-- 5. Financial Guard -->
+<section id="finance" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight" data-i18n="financeTitle">逆向财务风控 · 熔断引擎</h2>
+    <div class="text-xs text-white/30" data-i18n="financeSub">实时 ROI 监控 · 现金流熔断决策</div>
   </div>
+  <div class="glass p-6 rounded-2xl border border-rose-500/30 hover:border-rose-500/50 hover-scale transition">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="inline-block px-3 py-0.5 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300">VETOED</span>
+      <h3 class="font-bold text-rose-300" data-i18n="financeVetoTitle">方案已触发熔断</h3>
+    </div>
+    <p class="text-sm text-white/60" data-i18n="financeVetoDesc">开模回收期达 14 个月，已超出该品类 6 个月生命周期。建议降级至免开模小改或包装优化方案。</p>
+    <div class="mt-4 flex gap-3">
+      <button onclick="toggleFallbackPlan()" class="glass px-4 py-2 rounded-lg text-xs font-medium text-rose-300 border border-rose-500/20 hover:bg-rose-950/30 transition">
+        <i data-lucide="arrow-down-circle" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span data-i18n="btnFallback">查看降级方案</span>
+      </button>
+      <button onclick="exportRfc()" class="glass px-4 py-2 rounded-lg text-xs font-medium text-white/60 border border-white/10 hover:text-white transition">
+        <i data-lucide="file-down" class="w-4 h-4 inline-block mr-1 align-text-bottom"></i><span data-i18n="btnExportRfc">导出工程 RFC</span>
+      </button>
+    </div>
+    <div id="fallbackPlan" class="hidden mt-5 p-4 rounded-xl bg-white/[0.04] border border-white/10 space-y-2 text-sm text-white/70">
+      <div class="font-semibold text-white/90" data-i18n="fallbackTitle">推荐降级路径</div>
+      <div class="grid md:grid-cols-2 gap-2">
+        <div class="flex justify-between"><span data-i18n="fallbackNoMold">免开模外观修订</span><span class="text-blue-400" data-i18n="fallbackNoMoldVal">0 模具费</span></div>
+        <div class="flex justify-between"><span data-i18n="fallbackTier">包装 Tier Down</span><span class="text-emerald-400" data-i18n="fallbackTierVal">单件 $0.85</span></div>
+        <div class="flex justify-between"><span data-i18n="fallbackPayback">预计回收期</span><span class="text-white" data-i18n="fallbackPaybackVal">3.1 个月</span></div>
+        <div class="flex justify-between"><span data-i18n="fallbackRisk">风险评级</span><span class="text-emerald-400" data-i18n="fallbackRiskVal">可控</span></div>
+      </div>
+    </div>
+  </div>
+</section>
 
-  <footer>
-    <span>备忘 · 供内部讨论</span>
-    <span>2026.08 · V1 · PRODUCT THINKING</span>
-  </footer>
+</main>
 
-</div>
+<script>
+const I18N = {
+  zh: {
+    title: "InsightX · 全球跨境电商 AI 市场洞察与动态决策系统",
+    subTitle: "全球跨境电商 AI 市场洞察与动态决策系统",
+    navDashboard: "战略大盘",
+    navDashboardSub: "实时体检",
+    navRadar: "竞品雷达",
+    navVoc: "评论洞察",
+    navReform: "改款决策",
+    navFinance: "财务风控",
+    badgeMonitoring: "2监测",
+    badgeVocUnit: "痛点",
+    dashTitle: "战略决策大盘",
+    dashSub: "实时Agent执行流 · 全局体检状态",
+    taskBtn: "触发分析任务",
+    kpiAsin: "监控 ASIN",
+    kpiAsinDelta: "+3 今日新增",
+    kpiVoc: "痛点聚类",
+    kpiVocDelta: "3 个高危",
+    kpiReform: "潜力改款",
+    kpiReformDelta: "预估 FBA 节省",
+    kpiFinance: "熔断警告",
+    kpiFinanceDelta: "待决策者处理",
+    agentStreamTitle: "Agent 执行流",
+    agentStreamIdle: "点击触发分析任务，观察抓取、视觉质检与决策回测链路",
+    agentStreamRunning: "正在执行多源抓取与链路回测...",
+    agentStreamDone: "执行完成",
+    agentStreamProgress: "执行中 {cur}/{total}",
+    stopTaskBtn: "停止任务",
+    radarTitle: "竞品时序监控",
+    radarSub: "实时价格波动 · BSR 趋势",
+    radarLegendA: "竞品 A",
+    radarLegendB: "竞品 B",
+    radarPrice: "价格",
+    radarReviews: "评论",
+    radarBsr: "BSR",
+    radarReformPot: "改款潜力",
+    vocTitle: "多模态评论洞察",
+    vocSub: "买家实拍图视觉取证 · 痛点聚类分布",
+    filterAll: "全部",
+    filterCritical: "高危",
+    filterModerate: "中危",
+    filterMinor: "低危",
+    reformTitle: "工厂级双栏改款决策",
+    reformTagBody: "本体优化",
+    reformTagPkg: "包装履约",
+    reformBodyTitle: "产品本体优化",
+    reformMaterialLabel: "材质替换",
+    reformMaterialVal: "ABS → 阻燃 PC",
+    reformMoldCountLabel: "开模费用",
+    reformDefectLabel: "预计缺陷率降低",
+    reformPkgTitle: "包装与履约优化",
+    reformTierLabel: "外箱尺寸降阶",
+    reformFreightLabel: "单件运费节省",
+    reformWeightLabel: "抛重优化 ↓",
+    financeTitle: "逆向财务风控 · 熔断引擎",
+    financeSub: "实时 ROI 监控 · 现金流熔断决策",
+    financeVetoTitle: "方案已触发熔断",
+    financeVetoDesc: "开模回收期达 14 个月，已超出该品类 6 个月生命周期。建议降级至免开模小改或包装优化方案。",
+    btnFallback: "查看降级方案",
+    btnExportRfc: "导出工程 RFC",
+    fallbackTitle: "推荐降级路径",
+    fallbackNoMold: "免开模外观修订",
+    fallbackNoMoldVal: "0 模具费",
+    fallbackTier: "包装 Tier Down",
+    fallbackTierVal: "单件 $0.85",
+    fallbackPayback: "预计回收期",
+    fallbackPaybackVal: "3.1 个月",
+    fallbackRisk: "风险评级",
+    fallbackRiskVal: "可控",
+    statusPending: "pending",
+    statusDone: "done",
+    rfcContent: `# InsightX 工程 RFC
+
+- 背景：方案触发财务熔断，建议转为免开模小改。
+- 降级动作：包装 Tier Down、说明书重做、配件校验加严。
+- 量化预期：单件运费节省 $0.85，缺陷率下降 25%。
+- 决策结论：暂缓开模，进入 4 周 A/B 回测。
+`,
+    steps: [
+      { t: 'FETCHING_DATA', msg: '已抓取并清洗 320 条多语言买家差评', dot: 'bg-blue-400' },
+      { t: 'VISION_AUDIT', msg: '视觉质检管线完成 18 条证据样本复核', dot: 'bg-blue-400' },
+      { t: 'SEMANTIC_CLUSTER', msg: 'bge-m3 聚类得出 TOP 3 结构性痛点', dot: 'bg-blue-400' },
+      { t: 'DUAL_DECISION', msg: '双栏决策 Agent 生成产品本体与包装优化方案', dot: 'bg-blue-400' },
+      { t: 'COMPLETED', msg: '财务否决审核完成，回测报告已生成', dot: 'bg-emerald-400' }
+    ]
+  },
+  en: {
+    title: "InsightX · Global Cross-Border E-commerce AI Market Insights & Dynamic Decision System",
+    subTitle: "Global Cross-Border E-commerce AI Market Insights & Dynamic Decision System",
+    navDashboard: "Strategic Dashboard",
+    navDashboardSub: "Live Health",
+    navRadar: "Competitor Radar",
+    navVoc: "VOC Insights",
+    navReform: "Reform Decision",
+    navFinance: "Financial Risk",
+    badgeMonitoring: "2 tracked",
+    badgeVocUnit: "issues",
+    dashTitle: "Strategic Decision Dashboard",
+    dashSub: "Real-time Agent execution flow · Global health status",
+    taskBtn: "Trigger Analysis Task",
+    kpiAsin: "Monitored ASINs",
+    kpiAsinDelta: "+3 added today",
+    kpiVoc: "Pain Clusters",
+    kpiVocDelta: "3 critical",
+    kpiReform: "Potential Reform",
+    kpiReformDelta: "Est. FBA Savings",
+    kpiFinance: "Circuit Breakers",
+    kpiFinanceDelta: "Awaiting review",
+    agentStreamTitle: "Agent Execution Stream",
+    agentStreamIdle: "Click trigger to run scraping, visual QA, and decision backtest pipeline",
+    agentStreamRunning: "Executing multi-source scraping and backtesting pipeline...",
+    agentStreamDone: "Execution Completed",
+    agentStreamProgress: "Running {cur}/{total}",
+    stopTaskBtn: "Stop Task",
+    radarTitle: "Competitor Time-Series Radar",
+    radarSub: "Real-time price volatility · BSR trend",
+    radarLegendA: "Competitor A",
+    radarLegendB: "Competitor B",
+    radarPrice: "Price",
+    radarReviews: "Reviews",
+    radarBsr: "BSR",
+    radarReformPot: "Reform Potential",
+    vocTitle: "Multimodal Review Insights (VOC)",
+    vocSub: "Buyer photo visual forensics · Issue cluster distribution",
+    filterAll: "All",
+    filterCritical: "Critical",
+    filterModerate: "Moderate",
+    filterMinor: "Minor",
+    reformTitle: "Factory-Grade Dual-Column Reform Decision",
+    reformTagBody: "Product Body",
+    reformTagPkg: "Packaging & Fulfillment",
+    reformBodyTitle: "Product Body Optimization",
+    reformMaterialLabel: "Material Substitution",
+    reformMaterialVal: "ABS → Flame-retardant PC",
+    reformMoldCountLabel: "Tooling Cost",
+    reformDefectLabel: "Est. Defect Reduction",
+    reformPkgTitle: "Packaging & Fulfillment Optimization",
+    reformTierLabel: "Packaging Tier Down",
+    reformFreightLabel: "Per-Unit Freight Savings",
+    reformWeightLabel: "Dimensional Weight ↓",
+    financeTitle: "Reverse Financial Risk Control · Veto Engine",
+    financeSub: "Real-time ROI monitoring · Cash flow circuit breaker",
+    financeVetoTitle: "Proposal Circuit-Breaker Triggered",
+    financeVetoDesc: "Tooling payback period is 14 months, exceeding product 6-month lifecycle. Downgrade to no-mold revision or packaging optimization.",
+    btnFallback: "View Fallback Plan",
+    btnExportRfc: "Export Engineering RFC",
+    fallbackTitle: "Recommended Fallback Path",
+    fallbackNoMold: "No-Mold Cosmetic Revision",
+    fallbackNoMoldVal: "$0 Mold Fee",
+    fallbackTier: "Packaging Tier Down",
+    fallbackTierVal: "$0.85 / unit",
+    fallbackPayback: "Est. Payback Period",
+    fallbackPaybackVal: "3.1 Months",
+    fallbackRisk: "Risk Rating",
+    fallbackRiskVal: "Manageable",
+    statusPending: "pending",
+    statusDone: "done",
+    rfcContent: `# InsightX Engineering RFC
+
+- Background: Proposal triggered financial circuit breaker. Recommend downgrade to no-mold revision.
+- Actions: Packaging Tier Down, user manual redesign, stricter accessory QA.
+- Expected Impact: Freight saved $0.85/unit, defect rate reduced by 25%.
+- Decision: Hold mold tooling; start 4-week A/B backtest.
+`,
+    steps: [
+      { t: 'FETCHING_DATA', msg: 'Fetched and cleaned 320 multilingual buyer negative reviews', dot: 'bg-blue-400' },
+      { t: 'VISION_AUDIT', msg: 'Visual QA pipeline verified 18 evidence samples', dot: 'bg-blue-400' },
+      { t: 'SEMANTIC_CLUSTER', msg: 'bge-m3 clustered top 3 structural pain points', dot: 'bg-blue-400' },
+      { t: 'DUAL_DECISION', msg: 'Dual-column decision Agent generated body and packaging plans', dot: 'bg-blue-400' },
+      { t: 'COMPLETED', msg: 'Financial veto audit passed; backtest report generated', dot: 'bg-emerald-400' }
+    ]
+  }
+};
+
+let currentLang = localStorage.getItem('insightx_lang') || 'zh';
+// ponytail: dictionary handles runtime UI translation and ECharts series/legend; expand keys when new modules are added.
+function setLang(lang) {
+  currentLang = lang;
+  localStorage.setItem('insightx_lang', lang);
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+
+  const zhBtn = document.getElementById('langZh');
+  const enBtn = document.getElementById('langEn');
+  if (zhBtn && enBtn) {
+    if (lang === 'zh') {
+      zhBtn.className = 'px-2.5 py-1 rounded-lg font-medium transition text-blue-300 bg-white/10';
+      enBtn.className = 'px-2.5 py-1 rounded-lg font-medium transition text-white/50 hover:text-white';
+    } else {
+      enBtn.className = 'px-2.5 py-1 rounded-lg font-medium transition text-blue-300 bg-white/10';
+      zhBtn.className = 'px-2.5 py-1 rounded-lg font-medium transition text-white/50 hover:text-white';
+    }
+  }
+
+  applyI18n();
+  updateVocCounts();
+  renderRadarChart();
+}
+
+function applyI18n() {
+  const t = I18N[currentLang] || I18N.zh;
+  document.title = t.title;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (t[key]) el.textContent = t[key];
+  });
+}
+
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const target = document.querySelector(link.getAttribute('href'));
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', link.getAttribute('href'));
+    updateActiveNav();
+  });
+});
+
+function updateActiveNav() {
+  const sections = document.querySelectorAll('section[id]');
+  const links = document.querySelectorAll('.nav-item');
+  let current = '';
+  sections.forEach(section => {
+    if (window.scrollY >= section.offsetTop - 180) current = section.id;
+  });
+  links.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
+  });
+}
+
+function filterVoc(filter) {
+  document.querySelectorAll('[data-filter]').forEach(chip => chip.classList.toggle('selected', chip.dataset.filter === filter));
+  document.querySelectorAll('.voc-card').forEach(card => card.setAttribute('aria-hidden', filter !== 'all' && card.dataset.severity !== filter));
+  updateVocCounts();
+}
+
+function updateVocCounts() {
+  const visible = document.querySelectorAll('.voc-card:not([aria-hidden="true"])').length;
+  const badge = document.querySelector('[href="#voc"] .nav-badge');
+  const t = I18N[currentLang] || I18N.zh;
+  if (badge) badge.textContent = `${visible} ${t.badgeVocUnit}`;
+}
+
+function toggleFallbackPlan() {
+  document.getElementById('fallbackPlan').classList.toggle('hidden');
+}
+
+function exportRfc() {
+  const t = I18N[currentLang] || I18N.zh;
+  const blob = new Blob([t.rfcContent], { type: 'text/markdown; charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'insightx-rfc.md';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+let taskTimer = null;
+let stepTimers = [];
+
+function cancelTaskTimers() {
+  clearTimeout(taskTimer);
+  taskTimer = null;
+  stepTimers.forEach(timer => clearTimeout(timer));
+  stepTimers = [];
+}
+
+function startMockTask() {
+  cancelTaskTimers();
+  const logs = document.getElementById('streamLogs');
+  const status = document.getElementById('taskStatus');
+  const btn = document.getElementById('taskBtn');
+  const t = I18N[currentLang] || I18N.zh;
+  logs.innerHTML = '';
+  status.textContent = t.agentStreamRunning;
+  btn.classList.add('pointer-events-none', 'opacity-70');
+
+  const steps = t.steps;
+
+  steps.forEach((s, i) => {
+    stepTimers.push(setTimeout(() => {
+      logs.insertAdjacentHTML('beforeend', `
+        <div class="flex items-center gap-3 p-3 rounded-lg glass border border-white/5 log-line">
+          <div class="w-2 h-2 rounded-full ${s.dot}"></div>
+          <div class="flex-1">
+            <div class="text-xs text-white/30 font-mono">${s.t}</div>
+            <div class="text-sm text-white/90">${s.msg}</div>
+          </div>
+          <div class="text-xs text-white/40">${i < 4 ? t.statusPending : t.statusDone}</div>
+        </div>`);
+      logs.scrollTop = logs.scrollHeight;
+      status.textContent = i < steps.length - 1 ? t.agentStreamProgress.replace('{cur}', i + 1).replace('{total}', steps.length) : t.agentStreamDone;
+      if (i === steps.length - 1) {
+        btn.classList.remove('pointer-events-none', 'opacity-70');
+      }
+    }, i * 900));
+  });
+
+  taskTimer = setTimeout(() => {
+    taskTimer = null;
+  }, steps.length * 900 + 300);
+}
+
+function stopMockTask() {
+  cancelTaskTimers();
+  const btn = document.getElementById('taskBtn');
+  const status = document.getElementById('taskStatus');
+  const t = I18N[currentLang] || I18N.zh;
+  btn.classList.remove('pointer-events-none', 'opacity-70');
+  status.textContent = t.agentStreamIdle;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('fallbackPlan').classList.add('hidden');
+  }
+});
+
+let radarChartInstance = null;
+function renderRadarChart() {
+  const radarDom = document.getElementById('radarChart');
+  if (!radarDom) return;
+  const t = I18N[currentLang] || I18N.zh;
+  if (!radarChartInstance) {
+    radarChartInstance = echarts.init(radarDom);
+    window.addEventListener('resize', () => radarChartInstance && radarChartInstance.resize());
+  }
+  radarChartInstance.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'item' },
+    legend: { data: [t.radarLegendA, t.radarLegendB], top: 5, left: 'center', textStyle: { color: 'rgba(230,232,239,0.45)' } },
+    radar: {
+      radius: '70%',
+      indicator: [
+        {name: t.radarPrice, max: 100},
+        {name: t.radarReviews, max: 100},
+        {name: t.radarBsr, max: 100},
+        {name: t.radarReformPot, max: 100}
+      ],
+      splitArea: { areaStyle: { color: ['rgba(59, 130, 246, 0.05)', 'rgba(59, 130, 246, 0.02)'] } },
+      axisLabel: { color: 'rgba(230,232,239,0.45)' },
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [
+        { value: [65, 78, 45, 82], name: t.radarLegendA, itemStyle: { color: '#3b82f6' } },
+        { value: [52, 68, 58, 71], name: t.radarLegendB, itemStyle: { color: '#10b981' } }
+      ],
+      areaStyle: { color: 'rgba(59, 130, 246, 0.1)' }
+    }],
+    animation: {
+      duration: 1200,
+      easing: 'cubic-in-out'
+    }
+  });
+  radarChartInstance.resize();
+}
+
+setLang(currentLang);
+updateActiveNav();
+window.addEventListener('scroll', updateActiveNav, { passive: true });
+updateVocCounts();
+
+setTimeout(() => {
+  document.querySelectorAll('.stagger-1 > *').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), i * 100);
+  });
+}, 100);
+  lucide.createIcons();
+</script>
+
 </body>
 </html>
