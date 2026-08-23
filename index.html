@@ -177,9 +177,13 @@
     color: var(--accent-amber);
     background: rgba(59,130,246,0.08);
   }
-  .voc-card { cursor: pointer; min-height: auto; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+  .voc-card { cursor: pointer; min-height: auto; height: 100%; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease; }
   .voc-card[aria-hidden='true'] { display: none; }
   .voc-card:hover { transform: translateY(-2px); }
+  .hover-scale { transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease; }
+  .hover-scale:hover { transform: translateY(-1px) scale(1.01); }
+  .stagger-1 > * { opacity: 0; transform: translateY(12px); }
+  .stagger-1 > *.visible { opacity: 1; transform: translateY(0); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
   /* Tablet optimizations */
   @media (max-width: 768px) {
     .grid-cols-4 { grid-template-columns: repeat(2, 1fr) !important; }
@@ -711,13 +715,24 @@ function exportRfc() {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'insightx-rfc.md';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 let taskTimer = null;
+let stepTimers = [];
+
+function cancelTaskTimers() {
+  clearTimeout(taskTimer);
+  taskTimer = null;
+  stepTimers.forEach(timer => clearTimeout(timer));
+  stepTimers = [];
+}
+
 function startMockTask() {
-  if (taskTimer) stopMockTask();
+  cancelTaskTimers();
   const logs = document.getElementById('streamLogs');
   const status = document.getElementById('taskStatus');
   const btn = document.getElementById('taskBtn');
@@ -729,7 +744,7 @@ function startMockTask() {
   const steps = t.steps;
 
   steps.forEach((s, i) => {
-    setTimeout(() => {
+    stepTimers.push(setTimeout(() => {
       logs.insertAdjacentHTML('beforeend', `
         <div class="flex items-center gap-3 p-3 rounded-lg glass border border-white/5 log-line">
           <div class="w-2 h-2 rounded-full ${s.dot}"></div>
@@ -744,15 +759,16 @@ function startMockTask() {
       if (i === steps.length - 1) {
         btn.classList.remove('pointer-events-none', 'opacity-70');
       }
-    }, i * 900);
+    }, i * 900));
   });
 
-  taskTimer = setTimeout(stopMockTask, steps.length * 900 + 300);
+  taskTimer = setTimeout(() => {
+    taskTimer = null;
+  }, steps.length * 900 + 300);
 }
 
 function stopMockTask() {
-  clearTimeout(taskTimer);
-  taskTimer = null;
+  cancelTaskTimers();
   const btn = document.getElementById('taskBtn');
   const status = document.getElementById('taskStatus');
   const t = I18N[currentLang] || I18N.zh;
@@ -777,8 +793,8 @@ function renderRadarChart() {
   }
   radarChartInstance.setOption({
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: [t.radarLegendA, t.radarLegendB], top: 5, left: 'center', textStyle: { color: 'var(--text-secondary)' } },
+    tooltip: { trigger: 'item' },
+    legend: { data: [t.radarLegendA, t.radarLegendB], top: 5, left: 'center', textStyle: { color: 'rgba(230,232,239,0.45)' } },
     radar: {
       radius: '70%',
       indicator: [
@@ -788,8 +804,8 @@ function renderRadarChart() {
         {name: t.radarReformPot, max: 100}
       ],
       splitArea: { areaStyle: { color: ['rgba(59, 130, 246, 0.05)', 'rgba(59, 130, 246, 0.02)'] } },
-      axisLabel: { color: 'var(--text-secondary)' },
-      splitLine: { lineStyle: { color: 'var(--border-color)' } }
+      axisLabel: { color: 'rgba(230,232,239,0.45)' },
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } }
     },
     series: [{
       type: 'radar',
