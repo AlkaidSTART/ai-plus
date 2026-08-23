@@ -1,11 +1,634 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Plus</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InsightX · 全球跨境电商 AI 市场洞察与动态决策系统</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-main: #0b0e14;
+    --bg-card: #11141c;
+    --bg-card-soft: #151922;
+    --border-color: rgba(255,255,255,0.08);
+    --border-accent: rgba(255,255,255,0.12);
+    --text-primary: #e8eaed;
+    --text-secondary: rgba(230,232,239,0.45);
+    --text-muted: rgba(230,232,239,0.25);
+    --accent-amber: #fcd34d;
+    --accent-amber-hover: #fbbf24;
+    --accent-rose: #fb7185;
+    --accent-emerald: #34d399;
+    --accent-cyan: #22d3ee;
+    --state-voided: #f87171;
+    --state-passed: #34d399;
+  }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.1);
+  }
+  ::selection {
+    background: rgba(252,211,77,0.3);
+    color: var(--bg-main);
+  }
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .glass {
+    background: rgba(17, 20, 28, 0.55);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: all 0.2s ease;
+  }
+  .glass:hover {
+    border-color: var(--border-accent);
+    background: rgba(17, 20, 28, 0.7);
+  }
+  .glass:focus-within {
+    border-color: var(--accent-amber);
+    box-shadow: 0 0 0 3px rgba(252,211,77,0.15);
+  }
+  .gradient-border {
+    border-image: linear-gradient(147deg, rgba(255,255,255,0.08), transparent) 1;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-amber);
+    box-shadow: 0 0 0 0 rgba(252,211,77,0.6);
+    animation: pulse 2s infinite ease-out;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(252,211,77,0.6); }
+    50% { box-shadow: 0 0 0 6px rgba(252,211,77,0); }
+    100% { box-shadow: 0 0 0 0 rgba(252,211,77,0.6); }
+  }
+  .fade-in-up {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fade-in-up.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .fade-in-stagger > * { opacity: 0; transform: translateY(20px); }
+  .fade-in-stagger.visible > * {
+    opacity: 1;
+    transform: translateY(0);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .hover-lift {
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .active-lift:active {
+    transform: translateY(1px);
+  }
+  .nav-indicator {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    height: 3px;
+    background: var(--accent-amber);
+    width: 0;
+    transform: translateX(-50%);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .nav-item:hover .nav-indicator,
+  .nav-item.active .nav-indicator {
+    width: 100%;
+  }
+  .nav-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--accent-rose);
+    color: white;
+    font-size: 7px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 9999px;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.2s ease;
+  }
+  .nav-item:hover .nav-badge,
+  .nav-item.active .nav-badge {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .nav-item {
+    position: relative;
+  }
+  .nav-sublabel {
+    position: absolute;
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .nav-item:hover .nav-sublabel {
+    opacity: 1;
+  }
+  /* Professional card hover states */
+  .card-pro {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-pro:hover {
+    border-color: var(--border-accent);
+    background: rgba(17, 20, 28, 0.75);
+    transform: translateY(-1px);
+  }
+  .card-pro:active {
+    transform: translateY(0);
+  }
+  .log-line {
+    animation: fadeIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 9999px;
+    border: 1px solid var(--border-color);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+  .chip:hover {
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.06);
+  }
+  .chip.selected {
+    border-color: rgba(252,211,77,0.35);
+    color: var(--accent-amber);
+    background: rgba(252,211,77,0.08);
+  }
+  .voc-card { cursor: pointer; min-height: 156px; }
+  .voc-card[aria-hidden='true'] { display: none; }
+  .voc-card:hover { transform: translateY(-2px); }
+  /* Tablet optimizations */
+  @media (max-width: 768px) {
+    .grid-cols-4 { grid-template-columns: repeat(2, 1fr) !important; }
+    .grid-cols-2 { grid-template-columns: 1fr !important; }
+  }
+</style>
 </head>
-<body>
-    
+<body class="min-h-screen">
+
+<!-- Header -->
+<header class="sticky top-0 z-50 border-b border-white/5 bg-[#0b0e14]/80 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-4">
+    <div class="relative">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 flex items-center justify-center font-extrabold text-sm shadow-[0_0_20px_-4px_rgba(252,211,77,0.3)]">IX</div>
+      <div class="absolute inset-0 rounded-xl bg-gradient-to-br from-amber-400 to-rose-500 opacity-20 blur-md -z-1"></div>
+    </div>
+    <div>
+      <h1 class="text-xl font-extrabold tracking-tight text-white">InsightX</h1>
+      <p class="text-xs text-white/30 font-light">全球跨境电商 AI 市场洞察与动态决策系统</p>
+    </div>
+  </div>
+  <nav class="hidden md:flex gap-1 text-sm text-white/40 font-medium">
+    <a href="#dashboard" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+      <span class="nav-indicator"></span>
+      <span class="relative">战略大盘</span>
+      <span class="nav-sublabel">实时体检</span>
+    </a>
+    <a href="#radar" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+      <span class="nav-indicator"></span>
+      <span class="relative">竞品雷达</span>
+      <span class="nav-badge">2监测</span>
+    </a>
+    <a href="#voc" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+      <span class="nav-indicator"></span>
+      <span class="relative">评论洞察</span>
+      <span class="nav-badge">42痛点</span>
+    </a>
+    <a href="#reform" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+      <span class="nav-indicator"></span>
+      <span class="relative">改款决策</span>
+    </a>
+    <a href="#finance" class="nav-item relative px-4 py-2 rounded-xl hover:text-white hover:bg-white/5 transition group">
+      <span class="nav-indicator"></span>
+      <span class="relative">财务风控</span>
+    </a>
+  </nav>
+</header>
+
+<main class="max-w-7xl mx-auto px-6 py-16 space-y-32 overflow-x-hidden">
+
+<!-- 1. Dashboard -->
+<section id="dashboard" class="space-y-8 fade-in-up">
+  <div class="flex items-end justify-between">
+    <div><h2 class="text-3xl font-extrabold tracking-tight">战略决策大盘</h2><p class="text-white/40 text-sm mt-1">实时Agent执行流 · 全局体检状态</p></div>
+    <button id="taskBtn" onclick="startMockTask()" class="glass px-6 py-3 rounded-xl text-sm font-bold text-white hover:text-amber-400 transition hover-scale border border-white/10 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50">
+      <span class="flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-7z"></path>
+        </svg>
+        <span>触发分析任务</span>
+      </span>
+    </button>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-1">
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="text-xs text-white/30 uppercase tracking-widest font-semibold">监控 ASIN</div>
+      <div class="text-3xl font-extrabold mt-2 text-white">42</div>
+      <div class="text-xs text-amber-400 mt-1">+3 今日新增</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="text-xs text-white/30 uppercase tracking-widest">痛点聚类</div>
+      <div class="text-3xl font-extrabold mt-2 text-white">7</div>
+      <div class="text-xs text-rose-400 mt-1">3 个高危</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="text-xs text-white/30 uppercase tracking-widest">潜力改款</div>
+      <div class="text-3xl font-extrabold mt-2 text-white">$48.2K</div>
+      <div class="text-xs text-emerald-400 mt-1">预估 FBA 节省</div>
+    </div>
+    <div class="glass p-5 rounded-2xl group-hover:hover-lift transition card-pro">
+      <div class="text-xs text-white/30 uppercase tracking-widest">熔断警告</div>
+      <div class="text-3xl font-extrabold mt-2 text-white">2</div>
+      <div class="text-xs text-rose-400 mt-1">待决策者处理</div>
+    </div>
+  </div>
+  <div id="taskStream" class="glass rounded-2xl border border-white/5 p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div id="taskDot" class="pulse-dot"></div>
+        <span class="text-sm font-bold">Agent 执行流</span>
+        <span id="taskStatus" class="text-xs text-white/40">点击触发分析任务，观察抓取、视觉质检与决策回测链路</span>
+      </div>
+      <button onclick="stopMockTask()" class="text-xs text-white/40 hover:text-white transition border border-white/10 px-3 py-1 rounded-lg">停止任务</button>
+    </div>
+    <div id="streamLogs" class="max-h-56 overflow-y-auto space-y-2 pr-1"></div>
+  </div>
+</section>
+
+<!-- 2. Competitor Radar -->
+<section id="radar" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight">竞品时序监控</h2>
+    <div class="text-xs text-white/30">实时价格波动 · BSR 趋势</div>
+  </div>
+  <div id="radarChart" class="h-72 glass rounded-2xl p-2 hover-scale transition"></div>
+</section>
+
+<!-- 3. VOC & Vision -->
+<section id="voc" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight">多模态评论洞察</h2>
+    <div class="text-xs text-white/30">买家实拍图视觉取证 · 痛点聚类分布</div>
+  </div>
+  <div class="grid md:grid-cols-3 gap-6">
+    <div class="md:col-span-1 space-y-4">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="filterVoc('all')" class="chip selected" data-filter="all"><span>全部</span></button>
+        <button onclick="filterVoc('critical')" class="chip" data-filter="critical"><span>高危</span></button>
+        <button onclick="filterVoc('moderate')" class="chip" data-filter="moderate"><span>中危</span></button>
+        <button onclick="filterVoc('minor')" class="chip" data-filter="minor"><span>低危</span></button>
+      </div>
+      <div class="glass p-4 rounded-xl border border-rose-400/20 hover:border-rose-400/40 transition hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">把手断裂</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 42 次 · 严重度 4.8</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“把手直接断裂，承重不良”</p>
+      </div>
+      <div class="glass p-4 rounded-xl border border-amber-400/20 hover:border-amber-400/40 transition hover-scale voc-card" data-severity="moderate">
+        <div class="flex items-center justify-between">
+          <h4 class="text-amber-300 font-bold">外壳色差</h4>
+          <span class="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded-full">MODERATE</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 28 次 · 严重度 3.9</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“颜色不一致，看起来质料差”</p>
+      </div>
+      <div class="glass p-4 rounded-xl border border-white/5 hover:border-white/20 transition hover-scale voc-card" data-severity="minor">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold">尺寸偏码</h4>
+          <span class="text-xs px-2 py-0.5 bg-white/10 text-white/60 rounded-full">MINOR</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 15 次 · 严重度 3.2</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“戴上头小脚趾疼”</p>
+      </div>
+    </div>
+    <div class="md:col-span-2 grid grid-cols-2 gap-3" id="vocs">
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">包装破损</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 23 次 · 严重度 4.3</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“开箱即发现配件挤压变形”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="moderate">
+        <div class="flex items-center justify-between">
+          <h4 class="text-amber-300 font-bold">说明书不清</h4>
+          <span class="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded-full">MODERATE</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 19 次 · 严重度 3.6</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“步骤缺图，安装过程混乱”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="minor">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold">配件遗漏</h4>
+          <span class="text-xs px-2 py-0.5 bg-white/10 text-white/60 rounded-full">MINOR</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 12 次 · 严重度 3.1</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“缺少备用垫片，无法完整组装”</p>
+      </button>
+      <button class="glass rounded-xl p-4 text-left hover-scale voc-card" data-severity="critical">
+        <div class="flex items-center justify-between">
+          <h4 class="text-rose-300 font-bold">续航虚标</h4>
+          <span class="text-xs px-2 py-0.5 bg-rose-500/20 text-rose-300 rounded-full">CRITICAL</span>
+        </div>
+        <p class="text-xs text-white/40 mt-2">频次 16 次 · 严重度 4.5</p>
+        <p class="text-xs text-white/50 mt-1 line-clamp-2">典型：“重度使用下续航明显低于宣传”</p>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Reformulation (双栏) -->
+<section id="reform" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight">工厂级双栏改款决策</h2>
+    <div class="flex gap-2 text-xs text-white/30">
+      <span class="px-2 py-0.5 rounded bg-amber-400/10 text-amber-300">本体优化</span>
+      <span class="px-2 py-0.5 rounded bg-rose-400/10 text-rose-300">包装履约</span>
+    </div>
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="glass p-6 rounded-2xl border border-amber-400/20 hover:border-amber-400/40 hover-scale transition">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+        <h3 class="font-extrabold text-amber-300 text-sm uppercase tracking-widest">产品本体优化</h3>
+      </div>
+      <ul class="space-y-3 text-sm text-white/80">
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60">材质替换</span>
+          <span class="text-amber-400 font-medium">ABS → 阻燃 PC</span>
+        </li>
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60">开模费用</span>
+          <span class="text-white">$3,200</span>
+        </li>
+        <li class="flex justify-between py-2">
+          <span class="text-white/60">预计缺陷率降低</span>
+          <span class="text-emerald-400 font-medium">-42%</span>
+        </li>
+      </ul>
+    </div>
+    <div class="glass p-6 rounded-2xl border border-rose-400/20 hover:border-rose-400/40 hover-scale transition">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-2 h-2 rounded-full bg-rose-400"></div>
+        <h3 class="font-extrabold text-rose-300 text-sm uppercase tracking-widest">包装与履约优化</h3>
+      </div>
+      <ul class="space-y-3 text-sm text-white/80">
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60">外箱尺寸降阶</span>
+          <span class="text-rose-400 font-medium">Tier Down</span>
+        </li>
+        <li class="flex justify-between py-2 border-b border-white/5">
+          <span class="text-white/60">单件运费节省</span>
+          <span class="text-emerald-400 font-medium">$0.85</span>
+        </li>
+        <li class="flex justify-between py-2">
+          <span class="text-white/60">抛重优化 ↓</span>
+          <span class="text-white">-18%</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Financial Guard -->
+<section id="finance" class="space-y-8 fade-in-up">
+  <div class="flex items-center justify-between">
+    <h2 class="text-3xl font-extrabold tracking-tight">逆向财务风控 · 熔断引擎</h2>
+    <div class="text-xs text-white/30">实时 ROI 监控 · 现金流熔断决策</div>
+  </div>
+  <div class="glass p-6 rounded-2xl border border-rose-500/30 hover:border-rose-500/50 hover-scale transition">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="inline-block px-3 py-0.5 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300">VETOED</span>
+      <h3 class="font-bold text-rose-300">方案已触发熔断</h3>
+    </div>
+    <p class="text-sm text-white/60">开模回收期达 14 个月，已超出该品类 6 个月生命周期。建议降级至免开模小改或包装优化方案。</p>
+    <div class="mt-4 flex gap-3">
+      <button onclick="toggleFallbackPlan()" class="glass px-4 py-2 rounded-lg text-xs font-medium text-rose-300 border border-rose-500/20 hover:bg-rose-950/30 transition">
+        查看降级方案
+      </button>
+      <button onclick="exportRfc()" class="glass px-4 py-2 rounded-lg text-xs font-medium text-white/60 border border-white/10 hover:text-white transition">
+        导出工程 RFC
+      </button>
+    </div>
+    <div id="fallbackPlan" class="hidden mt-5 p-4 rounded-xl bg-white/[0.04] border border-white/10 space-y-2 text-sm text-white/70">
+      <div class="font-semibold text-white/90">推荐降级路径</div>
+      <div class="grid md:grid-cols-2 gap-2">
+        <div class="flex justify-between"><span>免开模外观修订</span><span class="text-amber-400">0 模具费</span></div>
+        <div class="flex justify-between"><span>包装 Tier Down</span><span class="text-emerald-400">单件 $0.85</span></div>
+        <div class="flex justify-between"><span>预计回收期</span><span class="text-white">3.1 个月</span></div>
+        <div class="flex justify-between"><span>风险评级</span><span class="text-emerald-400">可控</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const target = document.querySelector(link.getAttribute('href'));
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    history.replaceState(null, '', link.getAttribute('href'));
+    updateActiveNav();
+  });
+});
+
+function updateActiveNav() {
+  const sections = document.querySelectorAll('section[id]');
+  const links = document.querySelectorAll('.nav-item');
+  let current = '';
+  sections.forEach(section => {
+    if (window.scrollY >= section.offsetTop - 180) current = section.id;
+  });
+  links.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
+  });
+}
+
+function filterVoc(filter) {
+  document.querySelectorAll('[data-filter]').forEach(chip => chip.classList.toggle('selected', chip.dataset.filter === filter));
+  document.querySelectorAll('.voc-card').forEach(card => card.setAttribute('aria-hidden', filter !== 'all' && card.dataset.severity !== filter));
+  updateVocCounts();
+}
+
+function updateVocCounts() {
+  const visible = document.querySelectorAll('.voc-card:not([aria-hidden="true"])').length;
+  const badge = document.querySelector('[href="#voc"] .nav-badge');
+  if (badge) badge.textContent = `${visible}痛点`;
+}
+
+function toggleFallbackPlan() {
+  document.getElementById('fallbackPlan').classList.toggle('hidden');
+}
+
+function exportRfc() {
+  const blob = new Blob([`# InsightX 工程 RFC\n\n- 背景：方案触发财务熔断，建议转为免开模小改。\n- 降级动作：包装 Tier Down、说明书重做、配件校验加严。\n- 量化预期：单件运费节省 $0.85，缺陷率下降 25%。\n- 决策结论：暂缓开模，进入 4 周 A/B 回测。\n`], { type: 'text/markdown; charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'insightx-rfc.md';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+let taskTimer = null;
+function startMockTask() {
+  if (taskTimer) stopMockTask();
+  const logs = document.getElementById('streamLogs');
+  const status = document.getElementById('taskStatus');
+  const btn = document.getElementById('taskBtn');
+  logs.innerHTML = '';
+  status.textContent = '正在执行多源抓取与链路回测...';
+  btn.classList.add('pointer-events-none', 'opacity-70');
+
+  const steps = [
+    { t: 'FETCHING_DATA', msg: '已抓取并清洗 320 条多语言买家差评', dot: 'bg-amber-400' },
+    { t: 'VISION_AUDIT', msg: '视觉质检管线完成 18 条证据样本复核', dot: 'bg-amber-400' },
+    { t: 'SEMANTIC_CLUSTER', msg: 'bge-m3 聚类得出 TOP 3 结构性痛点', dot: 'bg-amber-400' },
+    { t: 'DUAL_DECISION', msg: '双栏决策 Agent 生成产品本体与包装优化方案', dot: 'bg-amber-400' },
+    { t: 'COMPLETED', msg: '财务否决审核完成，回测报告已生成', dot: 'bg-emerald-400' }
+  ];
+
+  steps.forEach((s, i) => {
+    setTimeout(() => {
+      logs.insertAdjacentHTML('beforeend', `
+        <div class="flex items-center gap-3 p-3 rounded-lg glass border border-white/5 log-line">
+          <div class="w-2 h-2 rounded-full ${s.dot}"></div>
+          <div class="flex-1">
+            <div class="text-xs text-white/30 font-mono">${s.t}</div>
+            <div class="text-sm text-white/90">${s.msg}</div>
+          </div>
+          <div class="text-xs text-white/40">${i < 4 ? 'pending' : 'done'}</div>
+        </div>`);
+      logs.scrollTop = logs.scrollHeight;
+      status.textContent = i < steps.length - 1 ? `执行中 ${i + 1}/${steps.length}` : '执行完成';
+      if (i === steps.length - 1) {
+        btn.classList.remove('pointer-events-none', 'opacity-70');
+      }
+    }, i * 900);
+  });
+
+  taskTimer = setTimeout(stopMockTask, steps.length * 900 + 300);
+}
+
+function stopMockTask() {
+  clearTimeout(taskTimer);
+  taskTimer = null;
+  const btn = document.getElementById('taskBtn');
+  const status = document.getElementById('taskStatus');
+  btn.classList.remove('pointer-events-none', 'opacity-70');
+  status.textContent = '点击触发分析任务，观察抓取、视觉质检与决策回测链路';
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('fallbackPlan').classList.add('hidden');
+  }
+});
+
+updateActiveNav();
+window.addEventListener('scroll', updateActiveNav, { passive: true });
+updateVocCounts();
+
+// ECharts radar chart with data animation
+const radarDom = document.getElementById('radarChart');
+if(radarDom){
+  const chart = echarts.init(radarDom);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: ['竞品 A', '竞品 B'], top: 5, left: 'center', textStyle: { color: 'var(--text-secondary)' } },
+    radar: {
+      radius: '70%',
+      indicator: [
+        {name: '价格', max: 100},
+        {name: '评论', max: 100},
+        {name: 'BSR', max: 100},
+        {name: '改款潜力', max: 100}
+      ],
+      splitArea: { areaStyle: { color: ['rgba(252, 211, 77, 0.05)', 'rgba(252, 211, 77, 0.02)'] } },
+      axisLabel: { color: 'var(--text-secondary)' },
+      splitLine: { lineStyle: { color: 'var(--border-color)' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [
+        { value: [65, 78, 45, 82], name: '竞品 A', itemStyle: { color: '#fcd34d' } },
+        { value: [52, 68, 58, 71], name: '竞品 B', itemStyle: { color: '#fb7185' } }
+      ],
+      areaStyle: { color: 'rgba(252, 211, 77, 0.1)' }
+    }],
+    animation: {
+      duration: 1200,
+      easing: 'cubic-in-out'
+    }
+  });
+  chart.resize();
+  window.addEventListener('resize', () => chart.resize());
+}
+
+setTimeout(() => {
+  document.querySelectorAll('.stagger-1 > *').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), i * 100);
+  });
+}, 100);
+</script>
+
 </body>
 </html>
