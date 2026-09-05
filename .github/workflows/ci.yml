@@ -1,0 +1,200 @@
+name: PR CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  copilot-review:
+    name: Request Copilot review
+    runs-on: ubuntu-latest
+    # 只在新 PR 时请求一次，避免每次 push 重复打扰
+    if: ${{ github.event.action == 'opened' }}
+    steps:
+      - name: Request Copilot review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" \
+            -d '{"reviewers":["copilot-pull-request-reviewer"]}')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" = "201" ]; then
+            echo "已请求 Copilot 审查 PR #$PR_NUMBER"
+          else
+            echo "::warning::请求 Copilot 审查失败 (HTTP $HTTP_CODE)。请确认仓库已开通 Copilot code review：Settings → Code review → Copilot code review。响应：$BODY"
+          fi
+
+  frontend-ci:
+    name: Frontend build (Vue + Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Type check & build
+        run: bun run build
+
+  backend-ci:
+    name: Backend check (Python + uv)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Syntax check
+        run: uv run python -m compileall .
+      - name: Verify dependencies import
+        run: uv run python -c "import fastapi, langgraph"
+
+  guard:
+    name: Close PR & email the author
+    needs: [frontend-ci, backend-ci]
+    if: ${{ !cancelled() && (needs.frontend-ci.result == 'failure' || needs.backend-ci.result == 'failure') }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_ID: ${{ github.run_id }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Collect errors & resolve author email
+        run: |
+          # 找出所有失败的 job
+          JOBS_JSON=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100")
+
+          FAILED_SUMMARY=""
+          ERROR_EXCERPT=""
+          while IFS=$'\t' read -r JOB_NAME JOB_ID; do
+            [ -z "$JOB_ID" ] && continue
+            FAILED_STEPS=$(echo "$JOBS_JSON" | jq -r --argjson jid "$JOB_ID" \
+              '.jobs[] | select(.id == $jid) | .steps[] | select(.conclusion == "failure") | .name' \
+              | paste -sd',' -)
+            FAILED_SUMMARY="${FAILED_SUMMARY}- ${JOB_NAME}（失败步骤：${FAILED_STEPS:-未知}）"$'\n'
+
+            # 下载失败 job 的日志，抓取报错行
+            LOG=$(curl -sf -L -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$REPO/actions/jobs/$JOB_ID/logs" \
+              | sed 's/\x1b\[[0-9;]*m//g' || true)
+            if [ -n "$LOG" ]; then
+              ERR_LINES=$(echo "$LOG" | grep -aiE "error|failed|exception" | tail -n 25 || true)
+              if [ -z "$ERR_LINES" ]; then
+                ERR_LINES=$(echo "$LOG" | tail -n 25)
+              fi
+              ERROR_EXCERPT="${ERROR_EXCERPT}【${JOB_NAME}】"$'\n'"${ERR_LINES}"$'\n\n'
+            fi
+          done < <(echo "$JOBS_JSON" | jq -r '.jobs[] | select(.conclusion == "failure") | [.name, (.id|tostring)] | @tsv')
+
+          # 解析提交人邮箱：优先取 head 提交的 git author email（跳过 GitHub noreply 邮箱），
+          # 再回退到 PR 作者的公开资料邮箱
+          EMAIL=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/commits/$HEAD_SHA" \
+            | jq -r '.commit.author.email // empty' || true)
+          case "$EMAIL" in
+            *@users.noreply.github.com|noreply@github.com|"") EMAIL="" ;;
+          esac
+          if [ -z "$EMAIL" ]; then
+            EMAIL=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/users/$PR_AUTHOR" | jq -r '.email // empty' || true)
+            case "$EMAIL" in
+              *@users.noreply.github.com|noreply@github.com|"") EMAIL="" ;;
+            esac
+          fi
+
+          if [ -n "$EMAIL" ]; then
+            echo "MAIL_TO=$EMAIL" >> "$GITHUB_ENV"
+            echo "收件人邮箱：$EMAIL"
+          else
+            echo "::warning::未能获取提交人的真实邮箱（提交使用了 GitHub noreply 邮箱且资料邮箱未公开），将只关闭 PR 不发邮件"
+          fi
+
+          cat > email_body.txt <<EOF
+          你好 @${PR_AUTHOR}，
+
+          你的 PR CI 检查未通过，该 PR 已被自动关闭。
+
+          仓库：${REPO}
+          PR：#${PR_NUMBER} ${PR_TITLE}
+          PR 链接：${PR_URL}
+          失败日志：${RUN_URL}
+
+          失败的检查：
+          ${FAILED_SUMMARY}
+          ------------------ 报错摘录 ------------------
+          ${ERROR_EXCERPT}
+          ----------------------------------------------
+
+          请修复问题后重新提交 PR。
+          （本邮件由 CI 自动发送，请勿回复）
+          EOF
+          # 去掉 heredoc 产生的行首缩进（-i.bak 在 GNU/macOS sed 上都可用）
+          sed -i.bak 's/^          //' email_body.txt && rm -f email_body.txt.bak
+
+      - name: Comment on PR
+        continue-on-error: true
+        run: |
+          COMMENT=$(cat <<EOF
+          ## ❌ CI 检查未通过，PR 已自动关闭
+
+          请修复问题后重新提交 PR。报错信息已发送至提交人邮箱。
+
+          [查看失败日志](${{ env.RUN_URL }})
+          EOF
+          )
+          curl -sf -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+            -d "$(jq -n --arg body "$COMMENT" '{body: $body}')" \
+            && echo "已在 PR 上留言" || echo "::warning::PR 留言失败"
+
+      - name: Close PR
+        continue-on-error: true
+        run: |
+          curl -sf -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER" \
+            -d '{"state":"closed"}' \
+            && echo "已关闭 PR #$PR_NUMBER" || echo "::warning::关闭 PR 失败（fork PR 场景下 GITHUB_TOKEN 可能没有写权限）"
+
+      - name: Email the PR author
+        if: env.MAIL_TO != ''
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT || 465 }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "❌ [${{ github.repository }}] PR #${{ github.event.pull_request.number }} CI 未通过，PR 已自动关闭"
+          to: ${{ env.MAIL_TO }}
+          from: ${{ secrets.SMTP_USERNAME }}
+          body: file://email_body.txt
