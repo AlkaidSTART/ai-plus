@@ -4,7 +4,7 @@
 | 文档版本 | V1.0 | 编制日期 | 2026-08-22 |
 | :--- | :--- | :--- | :--- |
 | 项目名称 | InsightX | 适用阶段 | 比赛初赛/复赛 & MVP 研发 |
-| 技术栈 | Next.js 16 (React 19) + FastAPI 0.141 + LangGraph 1.2 + PostgreSQL 18 / pgvector 0.8 + Redis 8 | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
+| 技术栈 | Vue 3.5 (Vite 8, 前后端分离 SPA) + FastAPI 0.141 + LangGraph 1.2 + PostgreSQL 18 / pgvector 0.8 + Redis 8 | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
 
 ---
 
@@ -73,7 +73,7 @@
   3. 前端以双栏卡片对照形式清晰展示。
 
 [P0-04] 交互式洞察大盘与任务流看板 (Dashboard)
-- 描述：统一的 Next.js 16 (React 19 + TailwindCSS 4) Web 界面，展示任务执行进度、核心指标卡片、差评痛点分布图表及改款决策报告。
+- 描述：统一的 Vue 3 (Vite 8 + TailwindCSS 4) Web 界面，展示任务执行进度、核心指标卡片、差评痛点分布图表及改款决策报告。
 - 用户故事：As a 决策者, I want to 在一个页面总览所有监控 ASIN 的关键指标与诊断结果, So that 快速评估竞品态势。
 - 验收标准：
   1. 包含核心 KPI 卡片（平均星级、差评率、改款潜力指数、预测 FBA 节约额）。
@@ -218,8 +218,8 @@ InsightX 平台架构
 sequenceDiagram
     autonumber
     actor User as 卖家/产品经理
-    participant Web as Next.js 16 / React 19 (BFF)
-    participant Core as FastAPI 0.141 + LangGraph 1.2
+    participant Web as Vue 3 / Vite (SPA 前端)
+    participant Core as FastAPI 0.141 + LangGraph 1.2 (后端)
     participant Store as PostgreSQL 18 + pgvector 0.8
     participant AI as Claude 3.7 / bge-m3 / Vision
     
@@ -277,7 +277,7 @@ class InsightState(TypedDict):
 ## 七、非功能性需求 (NFR)
 
 ### 7.1 性能与响应时效 (Performance)
-1. **BFF 接口响应**：基础查询接口 P95 延迟 <= 200ms。
+1. **FastAPI 接口响应**：基础查询接口 P95 延迟 <= 200ms。
 2. **异步任务吞吐**：单 ASIN 500 条评论的全链路分析（抓取 $\rightarrow$ 向量化 $\rightarrow$ VLM 取证 $\rightarrow$ 建议生成）在 30 秒至 60 秒内完成。
 3. **向量检索性能**：pgvector 在 10 万条评论级数据集上，Top 50 混合余弦检索耗时 <= 50ms。
 4. **SSE 流式延迟**：Agent 节点状态变动至前端展示延迟 <= 300ms。
@@ -310,7 +310,7 @@ class InsightState(TypedDict):
 |    及严重度评分。                   |    与开模供应链周期动态熔断。        |
 | 4. 双栏改款建议：生成本体优化与包装  | 4. 历史时间切片回测验证系统与吻合度  |
 |    优化结构化方案。                 |    得分计算。                      |
-| 5. 可视化大盘：Next.js 16 看板展示 (ECharts 6) | 5. 供应链信号与原材料海运波动预警。  |
+| 5. 可视化大盘：Vue 3 看板展示 (ECharts 6) | 5. 供应链信号与原材料海运波动预警。  |
 |    及 SSE 节点推进流。             | 6. 自动化导出专业级工程改款 RFC     |
 | 6. 基础证据溯源：卡片关联原始评论。   |    (PDF/Word)。                    |
 +------------------------------------+------------------------------------+
@@ -322,9 +322,9 @@ class InsightState(TypedDict):
 
 | 阶段 | 周期 | 核心里程碑交付物 | 关键责任模块 |
 | :--- | :--- | :--- | :--- |
-| **M1: 架构与原型搭设** | 第 1 周 (Day 1-7) | • Monorepo 仓库初始化<br>• PostgreSQL/pgvector 数据库表结构初始化<br>• Next.js 16 UI 框架与 Dashboard 原型搭建 | 全员 / 前端 |
+| **M1: 架构与原型搭设** | 第 1 周 (Day 1-7) | • 前后端分离仓库初始化（frontend/ + backend/）<br>• PostgreSQL/pgvector 数据库表结构初始化<br>• Vue 3 + Vite UI 框架与 Dashboard 原型搭建 | 全员 / 前端 |
 | **M2: P0 核心数据与算法闭环** | 第 2 周 (Day 8-14) | • Amazon 评论抓取与清洗管道联通<br>• bge-m3 向量化与 pgvector (HNSW) 检索跑通<br>• LangGraph 1.2 双栏改款 Agent 生成测试通过 | 后端 / AI 核心 |
-| **M3: 前后端联调与初赛交付** | 第 3 周 (Day 15-21) | • Next.js BFF 与 FastAPI SSE 状态流透传<br>• 双栏决策看板 + 证据链抽屉交互联调<br>• **完成初赛 Demo 录屏与申报材料提交** | 全员 |
+| **M3: 前后端联调与初赛交付** | 第 3 周 (Day 15-21) | • Vue 3 前端与 FastAPI SSE 状态流直连联调（CORS + EventSource）<br>• 双栏决策看板 + 证据链抽屉交互联调<br>• **完成初赛 Demo 录屏与申报材料提交** | 全员 |
 | **M4: P1 多模态与财务风控增强** | 第 4 周 (Day 22-28) | • 接入 Claude Vision 买家实拍图缺陷解析<br>• 财务否决熔断逻辑与抛重降阶算法上线<br>• 证据反向穿透交互完善 | AI 核心 / 后端 |
 | **M5: P2 回测体系与多平台扩展** | 第 5 周 (Day 29-35) | • 接入 TikTok/Temu 样本数据<br>• 历史时间切片回测验证模块交付<br>• 性能调优与压测 | 全员 |
 | **M6: 决赛演练与上线发布** | 第 6 周 (Day 36-40) | • Docker Compose 一键部署验证<br>• 现场演示 PPT、Demo 演讲稿与防翻车预案准备 | 全员 / 队长 |
