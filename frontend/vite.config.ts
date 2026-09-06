@@ -5,8 +5,10 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // 独立部署 SPA：根路径部署，与 Astro 落地页完全解耦
-  base: '/',
+  // 部署形态：
+  // - 独立部署 SPA（默认）：base '/'，根路径部署，与 Astro 落地页完全解耦
+  // - GitHub Pages：构建时设 VITE_BASE=/ai-plus/（对应 https://alkaidstart.github.io/ai-plus/）
+  base: process.env.VITE_BASE ?? '/',
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {

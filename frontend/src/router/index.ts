@@ -1,9 +1,12 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+// 部署形态：独立部署（base '/'）用 history；GitHub Pages 子路径部署（base '/ai-plus/'）用 hash，避免刷新 404
+const base = import.meta.env.VITE_BASE ?? '/'
+const history = base === '/' ? createWebHistory(base) : createWebHashHistory(base)
+
 const router = createRouter({
-  // 独立部署 SPA：根路径
-  history: createWebHistory('/'),
+  history,
   routes: [
     {
       path: '/login',
