@@ -158,12 +158,18 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
         clusters = state.get("clustered_issues", [])
         proposals = state.get("proposals", [])
         reviews = state.get("raw_reviews", [])
+        ratings = [r["rating"] for r in reviews]
+        avg_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
+        negative = [r for r in reviews if r["rating"] <= 3.0]
+        negative_rate = round(len(negative) / len(reviews), 2) if reviews else None
         summary = {
             "review_count": len(reviews),
             "cluster_count": len(clusters),
             "proposal_count": len(proposals),
             "veto_status": state.get("veto_status", "PENDING"),
             "backtest_score": state.get("backtest_score"),
+            "avg_rating": avg_rating,
+            "negative_review_rate": negative_rate,
         }
         final_report = {
             "task_id": state["task_id"],

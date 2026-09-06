@@ -69,6 +69,8 @@ class TaskSummaryOut(BaseModel):
     proposal_count: int | None = None
     veto_status: str = "PENDING"
     backtest_score: float | None = None
+    avg_rating: float | None = None
+    negative_review_rate: float | None = None
 
 
 class TaskDetail(BaseModel):
