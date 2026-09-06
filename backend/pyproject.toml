@@ -1,10 +1,31 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "InsightX backend - AI market insight and decision system for cross-border e-commerce"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.141.1",
     "langgraph>=1.2.11",
+    "sqlalchemy[asyncio]>=2.0.40",
+    "asyncpg>=0.30.0",
+    "redis>=6.0.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "pgvector>=0.4.1",
 ]
+
+[project.optional-dependencies]
+# 本地真实 Embedding（bge-m3）运行时才需要；CI/测试不安装、不下载模型
+embedding = ["sentence-transformers>=5.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=1.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
