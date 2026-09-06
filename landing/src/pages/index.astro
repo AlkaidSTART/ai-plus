@@ -1,0 +1,521 @@
+---
+// InsightX 营销落地页（Astro）
+// Vue island：<PipelineDemo client:load /> 演示 LangGraph 任务管线
+import FeatureCard from '../components/FeatureCard.astro'
+import PipelineDemo from '../components/PipelineDemo.vue'
+
+const features = [
+  {
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    title: '战略决策大盘',
+    desc: '统一看板聚合全部监控竞品的核心指标、运行中任务、痛点聚类、FBA 节省池与风控熔断记录，一屏掌握全局态势。',
+    tags: ['KPI 卡片', '告警速览', '任务看板'],
+  },
+  {
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    title: '竞品时序监控',
+    desc: '分钟级价格 / BSR / Coupon / Buy Box 走势追踪，价格低谷与促销异动一目了然，为定价策略提供时序证据。',
+    tags: ['价格走势', 'BSR 追踪', '促销信号'],
+  },
+  {
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    title: '多模态评论洞察',
+    desc: 'bge-m3 多语言向量聚类痛点 + Claude Vision 买家实拍图缺陷取证，突破纯文本局限，直达物理级缺陷。',
+    tags: ['痛点聚类', 'VLM 取证', '多语言对齐'],
+  },
+  {
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    title: '工厂级改款决策',
+    desc: '双栏改款清单：左栏产品物理本体优化（材质 / 结构 / 公差），右栏包装履约降本（箱规 / FBA 档位 / 防震）。',
+    tags: ['双栏清单', '开模方案', '证据反查'],
+  },
+  {
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    title: '逆向财务与风控熔断',
+    desc: '内置开模成本、MOQ、抛重比与回本周期约束，对高危内卷项目主动发起财务否决与免开模替代建议。',
+    tags: ['ROI 模拟', '熔断否决', '历史回测'],
+  },
+]
+
+const howItWorks = [
+  { no: '01', title: '采集', desc: 'Playwright 抓取 Amazon 评论与买家实拍图，多源时序入库' },
+  { no: '02', title: '取证', desc: 'Claude Vision 对实拍图做色差 / 破损 / 断裂等物理缺陷质检' },
+  { no: '03', title: '聚类', desc: 'bge-m3 多语言向量化，pgvector 相似度聚类归纳核心痛点' },
+  { no: '04', title: '决策', desc: 'LangGraph 生成本体 / 包装双栏改款清单，财务引擎逆向否决' },
+]
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="InsightX —— 工业级出海选品、改款决策与动态风控引擎。多模态 VOC、双栏改款、逆向财务熔断，全链路证据溯源。" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>InsightX · 全球跨境电商 AI 市场洞察与动态决策系统</title>
+    <style is:global>
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+        -webkit-font-smoothing: antialiased;
+      }
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      a {
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Hero -->
+    <header class="hero">
+      <nav class="container nav">
+        <div class="brand">
+          <span class="brand-mark">✦</span>
+          <span>InsightX</span>
+        </div>
+        <div class="nav-links">
+          <a href="#features">核心能力</a>
+          <a href="#pipeline">管线演示</a>
+          <a href="#how">工作原理</a>
+          <a class="nav-cta" href="/app/">进入控制台</a>
+          <a class="nav-gh" href="https://github.com/AlkaidSTART/ai-plus" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+
+      <div class="container hero-body">
+        <div class="hero-copy">
+          <span class="hero-badge">全球跨境电商 AI 市场洞察与动态决策系统</span>
+          <h1>从海量差评与竞品信号，<br />到<span class="grad">工厂级改款与财务熔断</span></h1>
+          <p class="hero-sub">
+            依托多源时序采集、多语言向量对齐与多模态 VLM 视觉取证，LangGraph Agent 闭环驱动——
+            为工贸一体出海企业提供选品、改款与风控的全链路智能决策。
+          </p>
+          <div class="hero-cta">
+            <a class="btn-primary" href="/app/">进入控制台</a>
+            <a class="btn-ghost" href="#pipeline">观看管线演示</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="term">
+            <div class="term-bar"><span class="term-dot red" /><span class="term-dot amber" /><span class="term-dot green" /><span class="term-title">insightx · task_9f2c81a4</span></div>
+            <div class="term-body">
+              <p><span class="t-ok">✓</span> 抓取 320 条评论 / 18 张买家实拍图</p>
+              <p><span class="t-ok">✓</span> 聚类 6 个核心质量痛点</p>
+              <p><span class="t-ok">✓</span> 生成 5 条双栏改款提案</p>
+              <p><span class="t-warn">!</span> 财务熔断 1 条高危提案（回本 14 个月）</p>
+              <p class="t-dim">→ 免开模替代建议已生成</p>
+            </div>
+          </div>
+          <div class="hero-glow" />
+        </div>
+      </div>
+
+      <div class="container hero-metrics">
+        <div class="metric"><strong>多平台</strong><span>Amazon / TikTok / Temu 时序拉通</span></div>
+        <div class="metric"><strong>多模态</strong><span>文本 + 买家实拍图双通道取证</span></div>
+        <div class="metric"><strong>可回测</strong><span>每条建议绑定原始证据链</span></div>
+      </div>
+    </header>
+
+    <!-- 核心能力 -->
+    <main>
+      <section id="features" class="container section">
+        <h2 class="section-title">五大核心能力</h2>
+        <p class="section-sub">从信号采集到资金熔断，覆盖决策全链路</p>
+        <div class="feature-grid">
+          {features.map((f) => (
+            <FeatureCard icon={f.icon} title={f.title} desc={f.desc} tags={f.tags} />
+          ))}
+        </div>
+      </section>
+
+      <!-- 管线演示（Vue island） -->
+      <section id="pipeline" class="pipeline-section">
+        <div class="container section">
+          <h2 class="section-title">单次诊断任务全流程</h2>
+          <p class="section-sub">点击运行，观看 LangGraph Agent 管线如何一步步产出决策</p>
+          <div class="pipeline-wrap">
+            <PipelineDemo client:load />
+          </div>
+        </div>
+      </section>
+
+      <!-- 工作原理 -->
+      <section id="how" class="container section">
+        <h2 class="section-title">工作原理</h2>
+        <p class="section-sub">四步闭环，从原始数据到工程级交付物</p>
+        <div class="how-grid">
+          {howItWorks.map((s) => (
+            <div class="how-card">
+              <span class="how-no">{s.no}</span>
+              <h3>{s.title}</h3>
+              <p>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- 结尾 CTA -->
+      <section class="cta">
+        <div class="container cta-inner">
+          <h2>让每一次改款决策，都有证据与预算兜底</h2>
+          <p>InsightX 已在真实跨境电商场景落地验证：结构化改款清单直达模具厂，财务熔断为内卷项目止损。</p>
+          <a class="btn-primary" href="/app/">进入控制台</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <span>© {new Date().getFullYear()} InsightX · AI-Powered Market Insight & Dynamic Decision</span>
+        <span class="footer-links">
+          <a href="https://github.com/AlkaidSTART/ai-plus" target="_blank" rel="noreferrer">GitHub</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  /* ============ Hero ============ */
+  .hero {
+    background: radial-gradient(1200px 600px at 70% -10%, #164e63 0%, transparent 55%),
+      radial-gradient(900px 500px at 10% 10%, #1e1b4b 0%, transparent 50%),
+      #020617;
+    color: #e2e8f0;
+    padding-bottom: 64px;
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    color: #fff;
+  }
+  .brand-mark {
+    color: #22d3ee;
+  }
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 14px;
+  }
+  .nav-links a {
+    color: #cbd5e1;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover {
+    color: #fff;
+  }
+  .nav-gh {
+    border: 1px solid #334155;
+    border-radius: 9999px;
+    padding: 6px 14px;
+  }
+  .nav-cta {
+    background: linear-gradient(90deg, #06b6d4, #6366f1);
+    color: #fff;
+    font-weight: 600;
+    border-radius: 9999px;
+    padding: 6px 14px;
+    transition: opacity 0.2s;
+  }
+  .nav-cta:hover {
+    opacity: 0.9;
+  }
+  .hero-body {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+    padding-top: 64px;
+    padding-bottom: 48px;
+  }
+  .hero-badge {
+    display: inline-block;
+    font-size: 13px;
+    color: #67e8f9;
+    border: 1px solid #155e75;
+    background: rgb(8 145 178 / 0.12);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: clamp(30px, 4.5vw, 52px);
+    line-height: 1.2;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0 0 20px;
+    letter-spacing: -0.5px;
+  }
+  .grad {
+    background: linear-gradient(90deg, #22d3ee, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero-sub {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #94a3b8;
+    margin: 0 0 28px;
+    max-width: 520px;
+  }
+  .hero-cta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    display: inline-block;
+    background: linear-gradient(90deg, #06b6d4, #6366f1);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 12px;
+    padding: 12px 24px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover {
+    opacity: 0.92;
+  }
+  .btn-ghost {
+    display: inline-block;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    font-size: 15px;
+    padding: 12px 24px;
+    transition: border-color 0.2s;
+  }
+  .btn-ghost:hover {
+    border-color: #64748b;
+  }
+  .hero-visual {
+    position: relative;
+  }
+  .hero-glow {
+    position: absolute;
+    inset: -40px -30px;
+    background: radial-gradient(60% 60% at 50% 50%, rgb(6 182 212 / 0.15), transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .term {
+    position: relative;
+    z-index: 1;
+    background: #0b1120;
+    border: 1px solid #1e293b;
+    border-radius: 14px;
+    box-shadow: 0 40px 80px -30px rgb(0 0 0 / 0.6);
+    overflow: hidden;
+  }
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #0f172a;
+    border-bottom: 1px solid #1e293b;
+  }
+  .term-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 9999px;
+  }
+  .term-dot.red { background: #f87171; }
+  .term-dot.amber { background: #fbbf24; }
+  .term-dot.green { background: #34d399; }
+  .term-title {
+    margin-left: 8px;
+    font-size: 12px;
+    color: #64748b;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+  .term-body {
+    padding: 20px;
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: #94a3b8;
+  }
+  .term-body p { margin: 0; }
+  .t-ok { color: #34d399; margin-right: 8px; }
+  .t-warn { color: #fbbf24; margin-right: 8px; }
+  .t-dim { color: #475569; }
+  .hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    border-top: 1px solid #1e293b;
+    padding-top: 32px;
+  }
+  .metric strong {
+    display: block;
+    font-size: 18px;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+  }
+  .metric span {
+    font-size: 13px;
+    color: #64748b;
+  }
+
+  /* ============ Section ============ */
+  .section {
+    padding-top: 80px;
+    padding-bottom: 80px;
+  }
+  .section-title {
+    text-align: center;
+    font-size: 32px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 10px;
+    letter-spacing: -0.3px;
+  }
+  .section-sub {
+    text-align: center;
+    color: #64748b;
+    font-size: 15px;
+    margin: 0 0 40px;
+  }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .pipeline-section {
+    background: #f1f5f9;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .pipeline-wrap {
+    max-width: 620px;
+    margin: 0 auto;
+  }
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+  .how-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+  }
+  .how-no {
+    position: absolute;
+    top: 16px;
+    right: 18px;
+    font-size: 28px;
+    font-weight: 800;
+    color: #e2e8f0;
+  }
+  .how-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #0f172a;
+  }
+  .how-card p {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #64748b;
+    margin: 0;
+  }
+
+  /* ============ CTA / Footer ============ */
+  .cta {
+    background: linear-gradient(90deg, #0e7490, #4f46e5);
+    color: #fff;
+  }
+  .cta-inner {
+    text-align: center;
+    padding-top: 72px;
+    padding-bottom: 72px;
+  }
+  .cta h2 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 14px;
+  }
+  .cta p {
+    font-size: 15px;
+    color: #cffafe;
+    max-width: 560px;
+    margin: 0 auto 28px;
+    line-height: 1.8;
+  }
+  .cta .btn-primary {
+    background: #fff;
+    color: #0e7490;
+  }
+  .footer {
+    background: #020617;
+    color: #475569;
+    font-size: 13px;
+  }
+  .footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+  .footer-links a {
+    color: #94a3b8;
+  }
+  .footer-links a:hover {
+    color: #e2e8f0;
+  }
+
+  @media (max-width: 900px) {
+    .hero-body {
+      grid-template-columns: 1fr;
+    }
+    .feature-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .how-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .hero-metrics {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 560px) {
+    .feature-grid,
+    .how-grid {
+      grid-template-columns: 1fr;
+    }
+    .nav-links {
+      display: none;
+    }
+  }
+</style>

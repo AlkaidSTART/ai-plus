@@ -1,1 +1,6 @@
 .DS_Store
+
+# Dependencies & build output
+**/node_modules
+**/dist
+**/.astro
