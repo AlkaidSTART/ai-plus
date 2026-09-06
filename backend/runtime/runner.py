@@ -159,6 +159,11 @@ class WorkflowRunner:
         if "retry_count" in partial:
             fields["retry_count"] = int(partial["retry_count"])
         await self.task_store.update(task_id, **fields)
+
+        # BACKTEST_EVAL 仅在实际执行时对前端可见；skip（enable_backtest=false）
+        # 时只推进内部进度，不发 SSE 事件
+        if node_name == "backtest_eval" and partial.get("backtest_score") is None:
+            return
         await self.event_store.publish(
             self._publish(task_id, step, progress, NODE_MESSAGES.get(node_name, node_name), extra)
         )

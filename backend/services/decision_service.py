@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from agents.state import ClusterItem, ProposalItem
+from runtime.event_store import utc_now_iso
 from services.financial import fba_tier_for, volumetric_weight_kg
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,9 @@ class DecisionService:
                 proposals.append(self._body(task_id, cluster, i, fallback=False))
         for i, cluster in enumerate(packaging_clusters[:2]):
             proposals.append(self._packaging(task_id, cluster, i, fallback))
+
+        for p in proposals:
+            p["created_at"] = utc_now_iso()
 
         if self.llm is not None and proposals:
             await self._polish(proposals)

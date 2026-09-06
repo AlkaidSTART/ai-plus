@@ -56,6 +56,12 @@ class RealProviders:
                 base_url=settings.AMAZON_API_BASE_URL,
                 api_key=settings.AMAZON_API_KEY,
             )
+        elif settings.is_prod and settings.PROVIDER_MODE == "real":
+            # 生产环境禁止静默使用 Fake 数据冒充真实市场数据：必须 fail-fast
+            raise RuntimeError(
+                "配置错误：production 环境 PROVIDER_MODE=real 但 AMAZON_API_BASE_URL 未配置。"
+                "请配置正式 Amazon 数据源，或将 PROVIDER_MODE 设为 deterministic（明确演示模式）。"
+            )
         else:
             logger.warning("AMAZON_API_BASE_URL 未配置，使用 FakeAmazonDataProvider（演示数据）")
             amazon = FakeAmazonDataProvider()
@@ -110,11 +116,6 @@ class RealProviders:
                 )
                 return links
 
-        class BacktestProviderImpl:
-            async def evaluate(self, task_id, clusters):
-                # 正式回测属 P2；当前返回确定性占位分数，enable_backtest 默认关闭
-                return 0.78
-
         class FinancialProviderImpl:
             engine = outer.engine
 
@@ -133,7 +134,6 @@ class RealProviders:
         self.cluster = ClusterProviderImpl()
         self.decision = DecisionProviderImpl()
         self.evidence = EvidenceProviderImpl()
-        self.backtest = BacktestProviderImpl()
         self.financial = FinancialProviderImpl()
 
     async def _persist_clusters(self, task_id: str, clusters) -> None:

@@ -78,3 +78,30 @@ def test_no_stack_trace_in_error_envelope():
     assert status == 500
     assert body["code"] == 50001
     assert "ABCXYZ" not in body["message"]
+
+
+def test_prod_real_mode_requires_amazon_base_url():
+    """production + PROVIDER_MODE=real 且未配置数据源 → 必须 fail-fast，禁止 Fake 静默兜底。"""
+    from core.config import Settings
+    from services.real_providers import RealProviders
+
+    settings = Settings(
+        APP_ENV="prod",
+        PROVIDER_MODE="real",
+        AMAZON_API_BASE_URL="",
+        _env_file=None,
+    )
+    with pytest.raises(RuntimeError, match="AMAZON_API_BASE_URL"):
+        RealProviders(settings)
+
+
+def test_dev_real_mode_allows_labeled_fake_fallback():
+    """dev 环境允许明确标识的 Fake fallback（日志警告），不抛错。"""
+    from core.config import Settings
+    from crawler.fake import FakeAmazonDataProvider
+    from services.real_providers import RealProviders
+
+    settings = Settings(APP_ENV="dev", PROVIDER_MODE="real", AMAZON_API_BASE_URL="", _env_file=None)
+    providers = RealProviders(settings)
+    # ReviewProviderImpl 闭包内持有 FakeAmazonDataProvider —— 通过 review_service 间接验证
+    assert isinstance(providers.review_service.provider, FakeAmazonDataProvider)

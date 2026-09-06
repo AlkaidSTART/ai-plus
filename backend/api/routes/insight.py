@@ -196,11 +196,15 @@ async def task_clusters(
 
     task = await _require_completed_task(runtime, task_id)
     clusters = clusters_of(task)
-    total = len(clusters)
+    # review_ids 为内部证据索引（api.md §7.2 契约外字段），在 API 边界剥离
+    public_clusters = [
+        {k: v for k, v in c.items() if k != "review_ids"} for c in clusters
+    ]
+    total = len(public_clusters)
     start = (page - 1) * page_size
     return Envelope(
         data={
-            "items": clusters[start : start + page_size],
+            "items": public_clusters[start : start + page_size],
             "total": total,
             "page": page,
             "page_size": page_size,
