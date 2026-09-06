@@ -66,6 +66,8 @@ jobs:
         run: uv sync --frozen
       - name: Syntax check
         run: uv run python -m compileall .
+      - name: Run backend tests (offline)
+        run: uv run pytest -q
       - name: Verify dependencies import
         run: uv run python -c "import fastapi, langgraph"
 
