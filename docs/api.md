@@ -34,12 +34,11 @@
 | 环境 | `VITE_USE_MOCK` | `VITE_API_BASE_URL` | 行为 |
 | :--- | :--- | :--- | :--- |
 | 前端演示（默认） | `true` | `/api/v1`（任意） | 全部接口走前端 Mock 数据层，无需后端 |
-| 本地联调 | `false` | `http://localhost:8000/api/v1` | REST 走 Vite `/api` 代理（`vite.config.ts` `server.proxy`） |
+| 本地联调（Vite 代理） | `false` | `/api/v1` | REST/SSE 走 Vite `/api` 代理（`vite.config.ts` `server.proxy`） |
 | 生产直连 | `false` | `https://api.example.com/api/v1` | 直接请求后端域名，**不经任何代理** |
 
-- **REST**：`request<T>()` 将 `API_BASE + 路径` 作为最终 URL；开发环境相对路径 `/api/v1` 由 Vite 代理转发，生产环境为绝对地址直连。
-- **SSE（EventSource 直连）**：前端用原生 `EventSource(\`${API_BASE}/insight/tasks/{task_id}/events\`)` 直连后端事件流，**不经过 Vite/Astro 代理**；后端需在响应头返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`（防 nginx 缓冲），并通过 `CORSMiddleware` 放行 SPA 域名（`Access-Control-Allow-Origin: <SPA 域名>`，`allow_credentials` 视鉴权方式而定）。若后端经 nginx 反代，需关闭该路径的 `proxy_buffering`。
-- Mock 模式下 SSE 由前端 `setInterval` 按 8 步任务规格播放预置事件（首个事件 `QUEUED`），用于脱离后端演示完整流程。
+- **REST**：`request<T>()` 将 `API_BASE + 路径` 作为最终 URL；开发环境使用相对路径（如 `/api/v1`）时可由 Vite 代理转发，生产环境通常配置为绝对地址直连。
+- **SSE（EventSource）**：前端用原生 `EventSource(\`${API_BASE}/insight/tasks/{task_id}/events\`)` 连接事件流；开发环境若 `API_BASE` 为相对路径则同样会走 Vite 代理，生产环境建议直连后端并确保关闭缓冲（`X-Accel-Buffering: no` 等）。
 
 ### 1.4 幂等与缓存
 - 同一 ASIN 在缓存期内（建议 24h）重复创建分析任务时，复用已抓取的评论数据切片，仅重算后续 Agent 节点（对应 PRD NFR 数据幂等性）。
