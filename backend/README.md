@@ -28,6 +28,20 @@ uv run pytest -q
 
 测试完全离线，不依赖 PostgreSQL / Redis / 外部 AI 服务。
 
+## 真实服务（可选）
+
+- 真实 Embedding（bge-m3）：`uv sync --extra embedding`（下载模型，约 2GB）
+- 正式数据源 / LLM：在 `.env` 配置 `AMAZON_API_BASE_URL`、`ANTHROPIC_API_KEY`
+- `PROVIDER_MODE=real` 时启用正式 Service/Provider；`TASK_STORE_BACKEND=db`、
+  `EVENT_STORE_BACKEND=redis` 时任务与事件走 PostgreSQL / Redis 生产路径
+
+## Docker
+
+```bash
+docker compose up --build   # 仓库根目录：PostgreSQL(pgvector) + Redis + backend
+curl http://localhost:8000/api/v1/health
+```
+
 ## 目录结构
 
 ```text

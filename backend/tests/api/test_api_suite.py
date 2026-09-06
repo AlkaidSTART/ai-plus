@@ -194,11 +194,14 @@ async def test_financial_simulate_validation(client):
 
 
 async def test_products_endpoints_offline(client):
-    # 无数据库时如实返回空列表 / 404，而不是伪造数据
+    # 无数据库时如实返回空列表 / 404，而不是伪造数据；
+    # 有数据库时返回真实行——两种环境都必须合法
     resp = await client.get("/api/v1/products")
     assert resp.status_code == 200
-    assert resp.json()["data"]["items"] == []
-    assert resp.json()["data"]["total"] == 0
+    body = resp.json()
+    assert body["code"] == 0
+    assert isinstance(body["data"]["items"], list)
+    assert body["data"]["total"] >= len(body["data"]["items"])
 
     resp = await client.get("/api/v1/products/00000000-0000-0000-0000-000000000000")
     assert resp.status_code == 404

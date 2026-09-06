@@ -25,7 +25,8 @@ async def test_health_returns_envelope(client):
     assert body["code"] == 0
     assert body["message"] == "ok"
     data = body["data"]
-    assert data["status"] == "degraded"  # no DB/Redis in the offline test env
+    # status 必须与真实连通性一致：全部可达才允许 ok
+    assert data["status"] == ("ok" if data["db"] and data["redis"] else "degraded")
     assert set(data.keys()) == {"status", "version", "db", "redis"}
 
 

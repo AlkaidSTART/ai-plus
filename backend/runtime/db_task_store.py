@@ -16,7 +16,10 @@ class DbTaskStore(TaskStore):
 
     async def create(self, task: TaskRecord) -> TaskRecord:
         async with self._maker()() as session:
-            return await TaskRepository(session).create(task)
+            await TaskRepository(session).create(task)
+        # 回读以取得 server 生成的 created_at 等字段
+        created = await self.get(task.task_id)
+        return created or task
 
     async def get(self, task_id: str) -> TaskRecord | None:
         async with self._maker()() as session:
