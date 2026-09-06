@@ -10,6 +10,7 @@ import hashlib
 from typing import Any, Protocol
 
 from agents.state import ClusterItem, EvidenceLinkItem, ProposalItem, ReviewItem, VisualEvidence
+from runtime.event_store import utc_now_iso
 from services.financial import FinancialEngine, fba_tier_for, volumetric_weight_kg
 
 DEFECT_SEEDS: list[tuple[str, str, str, str]] = [
@@ -56,12 +57,6 @@ class EvidenceProvider(Protocol):
         clusters: list[ClusterItem],
         evidences: list[VisualEvidence],
     ) -> list[EvidenceLinkItem]: ...
-
-
-class BacktestProvider(Protocol):
-    async def evaluate(
-        self, task_id: str, clusters: list[ClusterItem]
-    ) -> float: ...
 
 
 class FinancialProvider(Protocol):
@@ -252,8 +247,11 @@ class DeterministicDecisionProvider:
                     fba_tier_old=fba_tier_for(vol_old),
                     fba_tier_new=fba_tier_for(vol_new),
                     fulfillment_saving_usd_per_unit=saving,
+                    created_at=utc_now_iso(),
                 )
             )
+        for p in proposals:
+            p.setdefault("created_at", utc_now_iso())
         return proposals
 
     def _body_proposal(
@@ -311,11 +309,6 @@ class DeterministicEvidenceProvider:
         return links
 
 
-class DeterministicBacktestProvider:
-    async def evaluate(self, task_id: str, clusters: list[ClusterItem]) -> float:
-        return 0.78
-
-
 class DeterministicFinancialProvider:
     """规则引擎即最终否决者；deterministic 模式不做持久化。"""
 
@@ -342,5 +335,4 @@ class DeterministicProviders:
         self.cluster = DeterministicClusterProvider()
         self.decision = DeterministicDecisionProvider(self.engine)
         self.evidence = DeterministicEvidenceProvider()
-        self.backtest = DeterministicBacktestProvider()
         self.financial = DeterministicFinancialProvider(self.engine)

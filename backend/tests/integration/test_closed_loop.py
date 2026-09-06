@@ -67,3 +67,53 @@ async def test_closed_loop_task_to_report():
         assert len(report["proposals"]) > 0
         assert all(p["status"] == "PASSED" for p in report["proposals"])
         assert len(report["evidence_links"]) == len(report["proposals"])
+
+        # ---- GET report ----
+        report_resp = (await client.get(f"/api/v1/insight/tasks/{task_id}/report")).json()
+        assert report_resp["code"] == 0
+        assert report_resp["data"]["task"]["status"] == "COMPLETED"
+
+        # ---- GET clusters ----
+        clusters = (
+            await client.get(f"/api/v1/insight/tasks/{task_id}/clusters")
+        ).json()["data"]
+        assert clusters["total"] == 5
+
+        # ---- GET proposals ----
+        proposals = (
+            await client.get(f"/api/v1/insight/tasks/{task_id}/proposals")
+        ).json()["data"]
+        assert proposals["total"] > 0
+
+        # ---- GET proposal evidence ----
+        proposal_id = proposals["items"][0]["proposal_id"]
+        evidence = (
+            await client.get(f"/api/v1/proposals/{proposal_id}/evidence")
+        ).json()["data"]
+        assert evidence["proposal_id"] == proposal_id
+        assert evidence["total"] > 0
+        assert evidence["reviews"][0]["review_id"]
+
+        # ---- POST financial/simulate（无副作用）----
+        simulate = (
+            await client.post(
+                "/api/v1/financial/simulate",
+                json={
+                    "mold_cost_usd": 8000,
+                    "moq": 1000,
+                    "current_gross_margin": 0.32,
+                    "expected_price_usd": 29.99,
+                    "unit_cost_increase_usd": 1.8,
+                    "package_size_old_cm": [30, 20, 12],
+                    "package_size_new_cm": [26, 18, 9],
+                    "expected_return_rate_reduction": 0.35,
+                },
+            )
+        ).json()
+        assert simulate["code"] == 0
+        assert {"roi", "payback_months", "veto_status", "payback_curve"} <= set(
+            simulate["data"].keys()
+        )
+        # simulate 无副作用：任务数量不变（仅 1 个创建的任务）
+        tasks_after = (await client.get("/api/v1/insight/tasks")).json()["data"]
+        assert tasks_after["total"] == 1
