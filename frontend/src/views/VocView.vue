@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
-import { getClusters, getVisualEvidences, listReviews } from '@/api'
+import { getClusters, getTask, getVisualEvidences, listReviews } from '@/api'
 import type { Cluster, Review, VisualEvidence } from '@/types'
 import { DEFECT_LABEL, ISSUE_TYPE_LABEL, SEVERITY_LABEL } from '@/utils/severity'
 import { DEFAULT_TASK_ID } from '@/stores/tasks'
