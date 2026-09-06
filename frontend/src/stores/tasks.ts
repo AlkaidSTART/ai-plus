@@ -47,10 +47,16 @@ export const useTasksStore = defineStore('tasks', () => {
     return ids
   }
 
+  let cancelFlow: (() => void) | null = null
+
   function startFlow(taskId: string) {
+    // 取消上一次订阅，避免并行 SSE / mock 定时器累积
+    cancelFlow?.()
+    cancelFlow = null
+
     flowSteps.value = []
     flowActive.value = true
-    subscribeTaskEvents(
+    cancelFlow = subscribeTaskEvents(
       taskId,
       (step, progress, message) => {
         flowSteps.value.push({
@@ -62,6 +68,7 @@ export const useTasksStore = defineStore('tasks', () => {
         })
       },
       () => {
+        cancelFlow = null
         flowActive.value = false
         fetchTasks()
         fetchTask(taskId).catch(() => {})
