@@ -3,6 +3,9 @@ name: PR CI
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -66,13 +69,15 @@ jobs:
         run: uv sync --frozen
       - name: Syntax check
         run: uv run python -m compileall .
+      - name: Run backend tests (offline)
+        run: uv run pytest -q
       - name: Verify dependencies import
         run: uv run python -c "import fastapi, langgraph"
 
   guard:
     name: Close PR & email the author
     needs: [frontend-ci, backend-ci]
-    if: ${{ !cancelled() && (needs.frontend-ci.result == 'failure' || needs.backend-ci.result == 'failure') }}
+    if: ${{ github.event_name == 'pull_request' && !cancelled() && (needs.frontend-ci.result == 'failure' || needs.backend-ci.result == 'failure') }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
