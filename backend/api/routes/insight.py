@@ -121,6 +121,140 @@ async def task_detail(
     return Envelope(data=to_task_detail(task))
 
 
+@router.post("/tasks/{task_id}/cancel", response_model=Envelope[TaskDetail])
+async def cancel_task(
+    task_id: str, runtime: Runtime = Depends(get_runtime)
+) -> Envelope[TaskDetail]:
+    task = await _get_task_or_404(runtime, task_id)
+    if task.status not in (TaskStatus.PENDING, TaskStatus.RUNNING):
+        raise ApiError(
+            ErrorCode.CONFLICT, f"任务状态为 {task.status.value}，无法取消"
+        )
+    runtime.runner.request_cancel(task_id)
+    task = await runtime.task_store.update(task_id, status=TaskStatus.CANCELED)
+    return Envelope(data=to_task_detail(task))
+
+
+@router.post("/tasks/{task_id}/retry", response_model=Envelope[TaskDetail])
+async def retry_task(
+    task_id: str, runtime: Runtime = Depends(get_runtime)
+) -> Envelope[TaskDetail]:
+    task = await _get_task_or_404(runtime, task_id)
+    if task.status != TaskStatus.FAILED:
+        raise ApiError(
+            ErrorCode.CONFLICT, f"仅 FAILED 任务可重试（当前状态 {task.status.value}）"
+        )
+    task = await runtime.task_store.update(
+        task_id,
+        status=TaskStatus.PENDING,
+        error_message=None,
+        retry_count=0,
+        progress=0,
+        current_node=None,
+        started_at=None,
+        finished_at=None,
+        final_report=None,
+    )
+    asyncio.get_running_loop().create_task(runtime.runner.run_task(task_id))
+    return Envelope(data=to_task_detail(task))
+
+
+async def _require_completed_task(runtime: Runtime, task_id: str) -> TaskRecord:
+    from services.task_results import require_completed
+
+    task = await _get_task_or_404(runtime, task_id)
+    require_completed(task)
+    return task
+
+
+@router.get("/tasks/{task_id}/report")
+async def task_report(
+    task_id: str, runtime: Runtime = Depends(get_runtime)
+) -> Envelope[dict]:
+    from services.task_results import clusters_of, evidences_of, financial_of, proposals_of
+
+    task = await _require_completed_task(runtime, task_id)
+    return Envelope(
+        data={
+            "task": to_task_detail(task).model_dump(),
+            "clusters": {"items": clusters_of(task)},
+            "proposals": {"items": proposals_of(task)},
+            "financial": financial_of(task),
+            "visual_evidences": {"items": evidences_of(task)},
+        }
+    )
+
+
+@router.get("/tasks/{task_id}/clusters")
+async def task_clusters(
+    task_id: str,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=5, ge=1, le=100),
+    runtime: Runtime = Depends(get_runtime),
+) -> Envelope[dict]:
+    from services.task_results import clusters_of
+
+    task = await _require_completed_task(runtime, task_id)
+    clusters = clusters_of(task)
+    total = len(clusters)
+    start = (page - 1) * page_size
+    return Envelope(
+        data={
+            "items": clusters[start : start + page_size],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    )
+
+
+@router.get("/tasks/{task_id}/proposals")
+async def task_proposals(
+    task_id: str,
+    track_type: str | None = Query(default=None),
+    runtime: Runtime = Depends(get_runtime),
+) -> Envelope[dict]:
+    from services.task_results import proposals_of
+
+    task = await _require_completed_task(runtime, task_id)
+    items = [
+        p
+        for p in proposals_of(task)
+        if track_type is None or p.get("track_type") == track_type
+    ]
+    return Envelope(data={"items": items, "total": len(items)})
+
+
+@router.get("/tasks/{task_id}/visual-evidences")
+async def task_visual_evidences(
+    task_id: str,
+    defect_category: str | None = Query(default=None),
+    min_confidence: float = Query(default=0.6, ge=0, le=1),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    runtime: Runtime = Depends(get_runtime),
+) -> Envelope[dict]:
+    from services.task_results import evidences_of
+
+    task = await _require_completed_task(runtime, task_id)
+    items = [
+        e
+        for e in evidences_of(task)
+        if (defect_category is None or e.get("defect_category") == defect_category)
+        and e.get("confidence", 0) >= min_confidence
+    ]
+    total = len(items)
+    start = (page - 1) * page_size
+    return Envelope(
+        data={
+            "items": items[start : start + page_size],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    )
+
+
 SSE_HEADERS = {
     "Cache-Control": "no-cache",
     "X-Accel-Buffering": "no",
