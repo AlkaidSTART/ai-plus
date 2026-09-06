@@ -145,14 +145,10 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
                 "current_node": "backtest_eval",
                 "progress": STEP_BY_NODE["backtest_eval"][2],
             }
-        score = await providers.backtest.evaluate(
-            state["task_id"], state.get("clustered_issues", [])
+        raise RuntimeError(
+            "P2 历史回测（Backtest）尚未实现：无法执行 enable_backtest=true 的任务，"
+            "请使用 enable_backtest=false 创建任务"
         )
-        return {
-            "backtest_score": score,
-            "current_node": "backtest_eval",
-            "progress": STEP_BY_NODE["backtest_eval"][2],
-        }
 
     async def finalize(state: InsightState) -> dict[str, Any]:
         clusters = state.get("clustered_issues", [])

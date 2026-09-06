@@ -79,10 +79,10 @@ async def test_vision_skip():
     assert result["backtest_score"] is None
 
 
-async def test_backtest_enabled():
+async def test_backtest_enabled_is_p2_not_implemented():
     graph = create_insight_graph()
-    result = await graph.ainvoke(base_state(options={"enable_backtest": True}))
-    assert result["backtest_score"] == 0.78
+    with pytest.raises(RuntimeError, match="P2 历史回测"):
+        await graph.ainvoke(base_state(options={"enable_backtest": True}))
 
 
 async def test_financial_passed():
