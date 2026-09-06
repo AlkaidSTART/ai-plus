@@ -5,16 +5,6 @@ import vue from '@astrojs/vue'
 // https://astro.build/config
 export default defineConfig({
   integrations: [vue()],
-  // 开发环境将 /app 前缀代理到 Vue SPA（5173），实现「落地页 → 控制台」同源联合
-  // 部署时在 Nginx 加一条 location /app { proxy_pass http://<spa>:<port>; } 即可复用
-  vite: {
-    server: {
-      proxy: {
-        '/app': {
-          target: 'http://localhost:5173',
-          changeOrigin: true,
-        },
-      },
-    },
-  },
+  // 独立部署：落地页与 Vue SPA 完全解耦，不再代理 /app 前缀
+  // 「进入控制台」CTA 通过 PUBLIC_SPA_URL 指向 SPA 独立地址（见 src/pages/index.astro）
 })

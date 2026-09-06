@@ -2,8 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
-  // base 与落地页 /app 代理前缀一致
-  history: createWebHistory('/app/'),
+  // 独立部署 SPA：根路径
+  history: createWebHistory('/'),
   routes: [
     {
       path: '/login',

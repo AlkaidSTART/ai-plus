@@ -4,6 +4,10 @@
 import FeatureCard from '../components/FeatureCard.astro'
 import PipelineDemo from '../components/PipelineDemo.vue'
 
+// 独立部署 SPA 地址：默认指向本地前端 dev server；
+// 生产部署时在 landing 环境变量中设置 PUBLIC_SPA_URL=<SPA 独立地址>
+const SPA_URL = import.meta.env.PUBLIC_SPA_URL ?? 'http://localhost:5173/'
+
 const features = [
   {
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
@@ -89,7 +93,7 @@ const howItWorks = [
           <a href="#features">核心能力</a>
           <a href="#pipeline">管线演示</a>
           <a href="#how">工作原理</a>
-          <a class="nav-cta" href="/app/">进入控制台</a>
+          <a class="nav-cta" href={SPA_URL}>进入控制台</a>
           <a class="nav-gh" href="https://github.com/AlkaidSTART/ai-plus" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
       </nav>
@@ -103,7 +107,7 @@ const howItWorks = [
             为工贸一体出海企业提供选品、改款与风控的全链路智能决策。
           </p>
           <div class="hero-cta">
-            <a class="btn-primary" href="/app/">进入控制台</a>
+            <a class="btn-primary" href={SPA_URL}>进入控制台</a>
             <a class="btn-ghost" href="#pipeline">观看管线演示</a>
           </div>
         </div>
@@ -172,7 +176,7 @@ const howItWorks = [
         <div class="container cta-inner">
           <h2>让每一次改款决策，都有证据与预算兜底</h2>
           <p>InsightX 已在真实跨境电商场景落地验证：结构化改款清单直达模具厂，财务熔断为内卷项目止损。</p>
-          <a class="btn-primary" href="/app/">进入控制台</a>
+          <a class="btn-primary" href={SPA_URL}>进入控制台</a>
         </div>
       </section>
     </main>

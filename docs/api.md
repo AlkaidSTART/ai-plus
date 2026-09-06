@@ -26,9 +26,20 @@
 - 时间字段统一 ISO 8601 UTC（`2026-09-05T08:00:00Z`）；金额单位 USD，保留 2 位小数；比率字段用 0~1 小数。
 - 分页参数：`page`（从 1 起）、`page_size`（默认 20，最大 100）；分页响应 `data` 为 `{ "items": [...], "total": 128, "page": 1, "page_size": 20 }`。
 
-### 1.3 开发环境代理
-- 前端开发环境由 Vite 将 `/api` 代理至 `http://localhost:8000`；生产环境通过 `VITE_API_BASE_URL` 指定后端地址。
-- SSE 长连接不经 Vite 代理缓冲（`EventSource` 直连或代理需关闭 buffer），后端通过 `CORSMiddleware` 放行前端来源。
+### 1.3 前端部署形态与连接方式
+前端采用**独立部署 SPA**（Vue 3.5 + Vite 8，`vite.base: '/'`、`createWebHistory('/')`），不再由 Astro 落地页同源代理；Astro 仅承载官网/落地页，通过 `PUBLIC_SPA_URL` 跳转到 SPA 独立地址。
+
+连接后端的方式由 `VITE_USE_MOCK` 与 `VITE_API_BASE_URL` 两个环境变量控制（见 [frontend/.env.example](../frontend/.env.example)）：
+
+| 环境 | `VITE_USE_MOCK` | `VITE_API_BASE_URL` | 行为 |
+| :--- | :--- | :--- | :--- |
+| 前端演示（默认） | `true` | `/api/v1`（任意） | 全部接口走前端 Mock 数据层，无需后端 |
+| 本地联调 | `false` | `http://localhost:8000/api/v1` | REST 走 Vite `/api` 代理（`vite.config.ts` `server.proxy`） |
+| 生产直连 | `false` | `https://api.example.com/api/v1` | 直接请求后端域名，**不经任何代理** |
+
+- **REST**：`request<T>()` 将 `API_BASE + 路径` 作为最终 URL；开发环境相对路径 `/api/v1` 由 Vite 代理转发，生产环境为绝对地址直连。
+- **SSE（EventSource 直连）**：前端用原生 `EventSource(\`${API_BASE}/insight/tasks/{task_id}/events\`)` 直连后端事件流，**不经过 Vite/Astro 代理**；后端需在响应头返回 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`（防 nginx 缓冲），并通过 `CORSMiddleware` 放行 SPA 域名（`Access-Control-Allow-Origin: <SPA 域名>`，`allow_credentials` 视鉴权方式而定）。若后端经 nginx 反代，需关闭该路径的 `proxy_buffering`。
+- Mock 模式下 SSE 由前端 `setInterval` 按 8 步任务规格播放预置事件（首个事件 `QUEUED`），用于脱离后端演示完整流程。
 
 ### 1.4 幂等与缓存
 - 同一 ASIN 在缓存期内（建议 24h）重复创建分析任务时，复用已抓取的评论数据切片，仅重算后续 Agent 节点（对应 PRD NFR 数据幂等性）。
@@ -468,6 +479,8 @@ Query：`defect_category`、`min_confidence`（默认 0.6）、分页。
 { "download_url": "https://.../rfc_tsk_9f2c81a4.pdf", "expires_in": 3600 }
 ```
 
+> **前端 Mock 契约注记**：前端 Mock 层当前返回 `{ task_id, format, filename, content }`（`content` 为 Markdown 文本），用于演示导出内容预览，**与后端契约 `{ download_url, expires_in }` 不一致**。切换真实后端（`VITE_USE_MOCK=false`）后，前端将按本契约下载文件；两种形态互不兼容，联调时以后端契约为准。
+
 ---
 
 ## 九、财务风控
@@ -627,6 +640,47 @@ Query：`type`（`price_movement` 价格异动 / `buy_box` 跟卖与 Buy Box / `
 3. 收到 `COMPLETED` 后关闭连接，`GET /insight/tasks/{task_id}/report` 拉取聚合结果渲染双栏看板；
 4. 用户点击"查看证据链" → `GET /proposals/{proposal_id}/evidence` 滑出抽屉；
 5. 老板拖动财务滑块 → `POST /financial/simulate` 实时刷新盈亏曲线与熔断横幅。
+
+---
+
+## 十三、接口可用性验证矩阵
+
+> 说明：后端当前为占位实现（`backend/main.py` 未提供真实 API），因此"接口可用"的验证落在**前端 Mock 数据层**。验证方式：`frontend/src/api/api.test.ts` 以 Vitest 对 **26 个 API 函数 + SSE 订阅**逐一断言契约（28 个用例，全部通过）；真实路径的可用性待后端实现后按本矩阵复测。
+
+| # | 接口 | 前端函数 | Mock 路径 | 真实路径 | 验证用例要点 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `GET /health` | `getHealth` | ✅ | ⏳ | 返回 `{status, version, db, redis}` |
+| 2 | `POST /auth/login` | `login` | ✅（localStorage 邮箱+密码） | ⏳ | 正确凭据成功、错误凭据抛错 |
+| 3 | `GET /auth/me` | `getMe` | ✅ | ⏳ | 返回当前用户 |
+| 4 | `POST /insight/tasks` | `createTask` | ✅ | ⏳ | 批量 ASIN 生成多任务、financial_constraint 透传 |
+| 5 | `GET /insight/tasks` | `listTasks` | ✅ | ⏳ | `status` 筛选、分页 |
+| 6 | `GET /insight/tasks/{id}` | `getTask` | ✅ | ⏳ | 未知名抛 `40401` |
+| 7 | `GET /insight/tasks/{id}/events` | `subscribeTaskEvents` | ✅（setInterval 播放 8 步） | ⏳（EventSource 直连） | 首事件 `QUEUED`、取消后停止推进 |
+| 8 | `POST /insight/tasks/{id}/cancel` | `cancelTask` | ✅ | ⏳ | 仅 `PENDING/RUNNING` 可取消 |
+| 9 | `POST /insight/tasks/{id}/retry` | `retryTask` | ✅ | ⏳ | 仅 `FAILED` 可重试 |
+| 10 | `GET /insight/tasks/{id}/report` | `getInsightReport` | ✅ | ⏳ | 聚合报告结构完整 |
+| 11 | `GET /dashboard/overview` | `getDashboardOverview` | ✅ | ⏳ | `days` 参数、KPI 7 字段 |
+| 12 | `GET /dashboard/recommendations` | `getRecommendations` | ✅ | ⏳ | Top 3 推荐列表 |
+| 13 | `GET /products` | `listProducts` | ✅ | ⏳ | `platform`/`marketplace`/`keyword` 筛选 |
+| 14 | `GET /products/{id}` | `getProduct` | ✅ | ⏳ | 未知名抛 `40401` |
+| 15 | `GET /products/{id}/price-history` | `getPriceHistory` | ✅ | ⏳ | `start_date`/`end_date`/`interval` |
+| 16 | `GET /products/{id}/reviews` | `listReviews` | ✅ | ⏳ | 星级/语言/关键词筛选 |
+| 17 | `GET /insight/tasks/{id}/clusters` | `getClusters` | ✅ | ⏳ | 痛点聚类 Top N |
+| 18 | `GET /insight/tasks/{id}/visual-evidences` | `getVisualEvidences` | ✅ | ⏳ | `defect_category`/`min_confidence` 筛选 |
+| 19 | `GET /insight/tasks/{id}/proposals` | `getProposals` | ✅ | ⏳ | 双栏改款清单 |
+| 20 | `GET /proposals/{id}` | `getProposal` | ✅ | ⏳ | 未知名抛 `40401` |
+| 21 | `GET /proposals/{id}/evidence` | `getProposalEvidence` | ✅ | ⏳ | 证据链（评论+实拍图） |
+| 22 | `POST /insight/tasks/{id}/export` | `exportRfc` | ✅（注：返回 Markdown，见 8.5 注记） | ⏳ | 下载契约与后端不同 |
+| 23 | `POST /financial/simulate` | `simulateFinancialApi` | ✅ | ⏳ | 健康 `PASSED` / 越限 `VETOED` |
+| 24 | `GET /insight/tasks/{id}/financial` | `getFinancialDecision` | ✅ | ⏳ | 否决决议结构 |
+| 25 | `POST /backtest/run` / `GET /backtest/{id}` | `runBacktest` / `getBacktest` | ✅ | ⏳ | 回测结果与吻合度 |
+| 26 | `GET /cross-platform/mapping` | `getCrossPlatformMapping` | ✅ | ⏳ | 同款 SKU 映射与价差 |
+| 27 | `GET /alerts` | `getAlerts` | ✅ | ⏳ | `type`/`is_read`/`severity` 筛选 |
+| 28 | `PATCH /alerts/{id}` | `markAlertRead` | ✅ | ⏳ | 标记已读后 `is_read=true` |
+
+- ✅ = 已通过 `frontend/src/api/api.test.ts` 验证（Mock 路径契约，28/28 用例通过）。
+- ⏳ = 待后端实现真实 API 后验证（前端真实路径分支已就绪，切换 `VITE_USE_MOCK=false` 即可联调）。
+- 运行验证：`cd frontend && npx vitest run`（当前 60/60 全绿，含 mock.test.ts / api.test.ts / utils 测试）。
 
 ---
 

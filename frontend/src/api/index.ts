@@ -57,9 +57,9 @@ function paginate<T>(items: T[], page = 1, pageSize = 20): PageData<T> {
 
 /* ---------- 系统 ---------- */
 
-export async function getHealth() {
+export async function getHealth(): Promise<{ status: string; version: string; db: boolean; redis: boolean }> {
   if (USE_MOCK) return ok({ status: 'ok', version: '0.1.0', db: true, redis: true })
-  return request('/health')
+  return request<{ status: string; version: string; db: boolean; redis: boolean }>('/health')
 }
 
 /* ---------- 洞察任务 ---------- */
@@ -181,9 +181,9 @@ export async function getInsightReport(taskId: string): Promise<InsightReport> {
 
 /* ---------- 大盘 ---------- */
 
-export async function getDashboardOverview(): Promise<DashboardOverview> {
+export async function getDashboardOverview(params?: { days?: number }): Promise<DashboardOverview> {
   if (USE_MOCK) return ok(mockOverview)
-  return request('/dashboard/overview')
+  return request(`/dashboard/overview${buildQuery(params ?? {})}`)
 }
 
 export async function getRecommendations(): Promise<PageData<Recommendation>> {
@@ -202,6 +202,8 @@ export async function listProducts(params?: {
 }): Promise<PageData<Product>> {
   if (USE_MOCK) {
     let items = [...mockProducts]
+    if (params?.platform) items = items.filter((p) => p.platform === params.platform)
+    if (params?.marketplace) items = items.filter((p) => p.marketplace === params.marketplace)
     if (params?.keyword) {
       const kw = params.keyword.toLowerCase()
       items = items.filter((p) => p.title.toLowerCase().includes(kw) || p.asin.toLowerCase().includes(kw))
@@ -220,12 +222,15 @@ export async function getProduct(productId: string): Promise<Product> {
   return request(`/products/${productId}`)
 }
 
-export async function getPriceHistory(productId: string): Promise<{ points: PricePoint[] }> {
+export async function getPriceHistory(
+  productId: string,
+  params?: { start_date?: string; end_date?: string; interval?: '6h' | '1d' },
+): Promise<{ points: PricePoint[] }> {
   if (USE_MOCK) {
     const idx = mockProducts.findIndex((x) => x.product_id === productId)
     return ok({ points: buildPriceHistory(90, mockProducts[idx]?.current_price ?? 29.99, idx + 1) })
   }
-  return request(`/products/${productId}/price-history`)
+  return request(`/products/${productId}/price-history${buildQuery(params ?? {})}`)
 }
 
 /* ---------- VOC ---------- */
@@ -267,6 +272,7 @@ export async function getVisualEvidences(
   if (USE_MOCK) {
     let items = [...mockEvidences]
     if (params?.defect_category) items = items.filter((e) => e.defect_category === params.defect_category)
+    if (params?.min_confidence != null) items = items.filter((e) => e.confidence >= params.min_confidence!)
     return ok(paginate(items, params?.page, params?.page_size))
   }
   return request(`/insight/tasks/${taskId}/visual-evidences${buildQuery(params ?? {})}`)
@@ -315,10 +321,18 @@ export async function getFinancialDecision(taskId: string): Promise<FinancialDec
 
 /* ---------- 扩展（P2） ---------- */
 
-export async function getAlerts(params?: { type?: string; is_read?: boolean; page?: number; page_size?: number }): Promise<PageData<Alert>> {
+export async function getAlerts(params?: {
+  type?: string
+  is_read?: boolean
+  severity?: 'high' | 'medium' | 'low'
+  page?: number
+  page_size?: number
+}): Promise<PageData<Alert>> {
   if (USE_MOCK) {
     let items = [...mockAlerts]
     if (params?.type) items = items.filter((a) => a.type === params.type)
+    if (params?.is_read != null) items = items.filter((a) => a.is_read === params.is_read)
+    if (params?.severity) items = items.filter((a) => a.severity === params.severity)
     return ok(paginate(items, params?.page, params?.page_size))
   }
   return request(`/alerts${buildQuery(params ?? {})}`)

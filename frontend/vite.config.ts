@@ -5,8 +5,8 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  // 与 Astro 落地页代理前缀一致：落地页 /app/* → 本 SPA
-  base: '/app/',
+  // 独立部署 SPA：根路径部署，与 Astro 落地页完全解耦
+  base: '/',
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
@@ -15,7 +15,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // 开发环境将 /api 代理至后端（docs/api.md §1.3）
+    // 开发环境将 /api 代理至后端（docs/api.md §1.3）；
+    // 生产环境通过 VITE_API_BASE_URL 直连后端（EventSource SSE 同样直连）
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
