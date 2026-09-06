@@ -141,7 +141,13 @@ class EvidenceRepository:
                 for key, value in values.items():
                     setattr(existing, key, value)
             else:
-                self.session.add(EvidenceLinkModel(proposal_id=link["proposal_id"], **values))
+                self.session.add(
+                    EvidenceLinkModel(
+                        proposal_id=link["proposal_id"],
+                        cluster_id=link["cluster_id"],
+                        **values,
+                    )
+                )
         await self.session.flush()
         return len(links)
 

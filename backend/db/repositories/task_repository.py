@@ -1,7 +1,7 @@
 """Repository for insight tasks (production TaskStore backend)."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -60,6 +60,15 @@ def to_model(record: TaskRecord) -> InsightTaskModel:
     )
 
 
+def _parse_dt(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        except ValueError:
+            return value
+    return value
+
+
 SIMPLE_FIELDS = {"current_node", "progress", "retry_count", "final_report", "error_message"}
 
 
@@ -88,7 +97,7 @@ class TaskRepository:
             elif key in SIMPLE_FIELDS:
                 values[key] = value
             elif key in ("started_at", "finished_at"):
-                values[key] = value
+                values[key] = _parse_dt(value)
         if not values:
             return await self.get(task_id)
         await self.session.execute(

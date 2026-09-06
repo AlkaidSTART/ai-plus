@@ -10,7 +10,6 @@ from api.errors import register_exception_handlers
 from api.router import api_router
 from core.config import get_settings
 from core.redis import close_redis
-from db.pgvector import ensure_pgvector
 from db.session import dispose_engine, get_engine
 from runtime.bootstrap import build_runtime
 
@@ -20,7 +19,9 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = get_engine()
-    await ensure_pgvector(engine)
+    from db.init_db import init_db
+
+    await init_db(engine)
     yield
     await dispose_engine()
     await close_redis()
@@ -36,7 +37,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -20,8 +20,12 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     DB_ECHO: bool = False
 
-    # CORS: JSON list or comma-separated origins
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    # CORS: comma-separated origins
+    BACKEND_CORS_ORIGINS: str = "http://localhost:5173"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.BACKEND_CORS_ORIGINS.split(",") if o.strip()]
 
     # SSE heartbeat interval in seconds
     SSE_HEARTBEAT_SECONDS: float = 15.0
@@ -48,18 +52,6 @@ class Settings(BaseSettings):
         return self.APP_ENV.lower() in {"prod", "production"}
 
 
-def _parse_origins(value: object) -> list[str]:
-    if isinstance(value, str):
-        return [origin.strip() for origin in value.split(",") if origin.strip()]
-    return value  # type: ignore[return-value]
-
-
 @lru_cache
 def get_settings() -> Settings:
-    import os
-
-    raw_origins = os.environ.get("BACKEND_CORS_ORIGINS")
-    kwargs: dict = {}
-    if raw_origins is not None:
-        kwargs["BACKEND_CORS_ORIGINS"] = _parse_origins(raw_origins)
-    return Settings(**kwargs)
+    return Settings()
