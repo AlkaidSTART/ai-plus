@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # Embedding
     EMBEDDING_DEVICE: str = "cpu"
 
+    # Provider mode: "deterministic" (Step 2 fakes) or "real" (Step 3 services)
+    PROVIDER_MODE: str = "deterministic"
+    REVIEW_CACHE_TTL_HOURS: float = 24.0
+
     @property
     def is_prod(self) -> bool:
         return self.APP_ENV.lower() in {"prod", "production"}

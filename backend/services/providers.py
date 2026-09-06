@@ -34,7 +34,7 @@ class VisionProvider(Protocol):
 
 class ClusterProvider(Protocol):
     async def cluster(
-        self, reviews: list[ReviewItem], evidences: list[VisualEvidence]
+        self, task_id: str, reviews: list[ReviewItem], evidences: list[VisualEvidence]
     ) -> list[ClusterItem]: ...
 
 
@@ -50,7 +50,11 @@ class DecisionProvider(Protocol):
 
 class EvidenceProvider(Protocol):
     async def trace(
-        self, task_id: str, proposals: list[ProposalItem], clusters: list[ClusterItem]
+        self,
+        task_id: str,
+        proposals: list[ProposalItem],
+        clusters: list[ClusterItem],
+        evidences: list[VisualEvidence],
     ) -> list[EvidenceLinkItem]: ...
 
 
@@ -58,6 +62,17 @@ class BacktestProvider(Protocol):
     async def evaluate(
         self, task_id: str, clusters: list[ClusterItem]
     ) -> float: ...
+
+
+class FinancialProvider(Protocol):
+    engine: Any
+
+    def evaluate_proposal(self, proposal: dict, constraint: dict) -> Any: ...
+
+    async def record(
+        self, task_id: str, proposals: list[ProposalItem],
+        constraint: dict, retry_count: int,
+    ) -> None: ...
 
 
 def _seed(text: str) -> int:
@@ -77,6 +92,9 @@ class DeterministicReviewProvider:
             if i % 5 == 4:
                 # positive filler
                 rating, text = 5.0, "Great product, works as expected."
+            elif i % 7 == 3:
+                # 无意义短评（上游真实存在的垃圾数据，供清洗管道过滤）
+                rating, text = 4.0, ("ok", "Good", "Fast shipping", "Nice")[seed % 4]
             else:
                 defect = DEFECT_SEEDS[seed % len(DEFECT_SEEDS)]
                 rating, text = 1.0 + (seed % 3), defect[1]
@@ -125,7 +143,7 @@ class DeterministicVisionProvider:
 
 class DeterministicClusterProvider:
     async def cluster(
-        self, reviews: list[ReviewItem], evidences: list[VisualEvidence]
+        self, task_id: str, reviews: list[ReviewItem], evidences: list[VisualEvidence]
     ) -> list[ClusterItem]:
         total = max(len(reviews), 1)
         clusters: list[ClusterItem] = []
@@ -264,7 +282,11 @@ class DeterministicDecisionProvider:
 
 class DeterministicEvidenceProvider:
     async def trace(
-        self, task_id: str, proposals: list[ProposalItem], clusters: list[ClusterItem]
+        self,
+        task_id: str,
+        proposals: list[ProposalItem],
+        clusters: list[ClusterItem],
+        evidences: list[VisualEvidence] | None = None,
     ) -> list[EvidenceLinkItem]:
         by_id = {c["cluster_id"]: c for c in clusters}
         links: list[EvidenceLinkItem] = []
@@ -294,6 +316,22 @@ class DeterministicBacktestProvider:
         return 0.78
 
 
+class DeterministicFinancialProvider:
+    """规则引擎即最终否决者；deterministic 模式不做持久化。"""
+
+    def __init__(self, engine: FinancialEngine | None = None) -> None:
+        self.engine = engine or FinancialEngine()
+
+    def evaluate_proposal(self, proposal: dict, constraint: dict) -> Any:
+        return self.engine.evaluate_proposal(proposal, constraint)
+
+    async def record(
+        self, task_id: str, proposals: list[ProposalItem],
+        constraint: dict, retry_count: int,
+    ) -> None:
+        return None
+
+
 class DeterministicProviders:
     """Bundle of all deterministic providers used by the default graph."""
 
@@ -305,3 +343,4 @@ class DeterministicProviders:
         self.decision = DeterministicDecisionProvider(self.engine)
         self.evidence = DeterministicEvidenceProvider()
         self.backtest = DeterministicBacktestProvider()
+        self.financial = DeterministicFinancialProvider(self.engine)

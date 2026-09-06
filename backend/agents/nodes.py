@@ -71,7 +71,9 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
 
     async def semantic_cluster(state: InsightState) -> dict[str, Any]:
         clusters = await providers.cluster.cluster(
-            state.get("raw_reviews", []), state.get("visual_evidences", [])
+            state["task_id"],
+            state.get("raw_reviews", []),
+            state.get("visual_evidences", []),
         )
         return {
             "clustered_issues": clusters,
@@ -102,7 +104,7 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
         proposals = state.get("proposals", [])
         any_vetoed = False
         for proposal in proposals:
-            evaluation = providers.engine.evaluate_proposal(proposal, constraint)
+            evaluation = providers.financial.evaluate_proposal(proposal, constraint)
             if evaluation.vetoed:
                 any_vetoed = True
                 proposal["status"] = "VETOED"
@@ -112,6 +114,9 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
                 proposal["veto_reason"] = None
                 proposal["estimated_roi"] = evaluation.roi
 
+        await providers.financial.record(
+            state["task_id"], proposals, constraint, state.get("retry_count", 0)
+        )
         return {
             "proposals": proposals,
             "veto_status": "VETOED" if any_vetoed else "PASSED",
@@ -122,7 +127,10 @@ def build_nodes(providers: DeterministicProviders | None = None) -> dict[str, An
 
     async def evidence_trace(state: InsightState) -> dict[str, Any]:
         links = await providers.evidence.trace(
-            state["task_id"], state.get("proposals", []), state.get("clustered_issues", [])
+            state["task_id"],
+            state.get("proposals", []),
+            state.get("clustered_issues", []),
+            state.get("visual_evidences", []),
         )
         return {
             "evidence_links": links,
