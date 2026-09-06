@@ -649,10 +649,8 @@ Query：`type`（`price_movement` 价格异动 / `buy_box` 跟卖与 Buy Box / `
 
 | # | 接口 | 前端函数 | Mock 路径 | 真实路径 | 验证用例要点 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | `GET /health` | `getHealth` | ✅ | ⏳ | 返回 `{status, version, db, redis}` |
-| 2 | `POST /auth/login` | `login` | ✅（localStorage 邮箱+密码） | ⏳ | 正确凭据成功、错误凭据抛错 |
-| 3 | `GET /auth/me` | `getMe` | ✅ | ⏳ | 返回当前用户 |
-| 4 | `POST /insight/tasks` | `createTask` | ✅ | ⏳ | 批量 ASIN 生成多任务、financial_constraint 透传 |
+| 2 | `POST /auth/login` | `useAuthStore.login` | ✅（localStorage 邮箱+密码） | ⏳ | 前端为本地 mock 登录；真实后端契约见 §3.2 |
+| 3 | `GET /auth/me` | `useAuthStore.user` | ✅（从 localStorage 读取） | ⏳ | 前端当前用户来自本地存储；真实后端契约见 §3.3 |
 | 5 | `GET /insight/tasks` | `listTasks` | ✅ | ⏳ | `status` 筛选、分页 |
 | 6 | `GET /insight/tasks/{id}` | `getTask` | ✅ | ⏳ | 未知名抛 `40401` |
 | 7 | `GET /insight/tasks/{id}/events` | `subscribeTaskEvents` | ✅（setInterval 播放 8 步） | ⏳（EventSource 直连） | 首事件 `QUEUED`、取消后停止推进 |
