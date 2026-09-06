@@ -12,6 +12,7 @@ from core.config import get_settings
 from core.redis import close_redis
 from db.pgvector import ensure_pgvector
 from db.session import dispose_engine, get_engine
+from runtime.bootstrap import build_runtime
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     # The /api/v1 prefix is applied exactly once, here.
     app.include_router(api_router, prefix="/api/v1")
     register_exception_handlers(app)
+    app.state.runtime = build_runtime(settings)
     return app
 
 

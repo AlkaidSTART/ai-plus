@@ -22,6 +22,7 @@ def utc_now_iso() -> str:
 
 
 class TaskEvent(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     task_id: str
     step: str
     progress: int = 0
