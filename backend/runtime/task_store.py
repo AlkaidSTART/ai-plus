@@ -50,6 +50,7 @@ class TaskRecord(BaseModel):
     financial_constraint: dict[str, Any] = Field(default_factory=dict)
     options: TaskOptions = Field(default_factory=TaskOptions)
     summary: TaskSummary = Field(default_factory=TaskSummary)
+    final_report: dict[str, Any] | None = None
     error_message: str | None = None
     created_at: str | None = None
     started_at: str | None = None

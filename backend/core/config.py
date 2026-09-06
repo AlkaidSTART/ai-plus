@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # SSE heartbeat interval in seconds
     SSE_HEARTBEAT_SECONDS: float = 15.0
 
+    # Runtime backends: "memory" (dev/test) or "db"/"redis" (production)
+    TASK_STORE_BACKEND: str = "memory"
+    EVENT_STORE_BACKEND: str = "memory"
+
     # Upstream data providers (Step 3). Empty means "not configured".
     AMAZON_API_BASE_URL: str = ""
     AMAZON_API_KEY: str = ""
