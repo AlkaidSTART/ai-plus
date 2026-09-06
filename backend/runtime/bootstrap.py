@@ -8,7 +8,7 @@
 
 from dataclasses import dataclass
 
-from agents.workflow import create_insight_graph
+from agents.workflow import create_insight_graph, build_graph
 from core.config import Settings
 from runtime.event_store import EventStore, InMemoryEventStore
 from runtime.redis_event_store import RedisEventStore
@@ -21,6 +21,14 @@ class Runtime:
     task_store: TaskStore
     event_store: EventStore
     runner: WorkflowRunner
+
+
+def build_graph_for_settings(settings: Settings):
+    if settings.PROVIDER_MODE == "real":
+        from services.real_providers import RealProviders
+
+        return build_graph(RealProviders(settings))
+    return create_insight_graph()
 
 
 def build_runtime(settings: Settings) -> Runtime:
@@ -41,5 +49,5 @@ def build_runtime(settings: Settings) -> Runtime:
     else:
         event_store = InMemoryEventStore()
 
-    runner = WorkflowRunner(create_insight_graph(), task_store, event_store)
+    runner = WorkflowRunner(build_graph_for_settings(settings), task_store, event_store)
     return Runtime(task_store=task_store, event_store=event_store, runner=runner)
