@@ -28,6 +28,16 @@ export default {
     agentReady: 'Ready',
     marketplace: 'Market',
     selectProduct: 'Select Product',
+    intro: 'Tour',
+    introTooltip: 'Replay Cinematic Product Tour',
+    login: 'Sign In',
+    logout: 'Sign Out',
+    productLabel: 'Active ASIN',
+    products: {
+      B08N5WRWNW: 'Ergonomic Chair',
+      B09V7K4P92: 'Commercial Blender',
+      B0CX87M2L1: 'Portable Power Station',
+    },
   },
   dashboard: {
     negativeRate: 'Negative Review Rate',
