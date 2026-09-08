@@ -7,6 +7,8 @@ import {
   ChevronRight,
   Layers,
   LogIn,
+  Pause,
+  Play,
   Scan,
   ShieldCheck,
   Sparkles,
@@ -24,6 +26,40 @@ const emit = defineEmits<{
 
 const activeIndex = ref(0);
 const heroCard = ref<HTMLElement | null>(null);
+
+const isAutoPlaying = ref(true);
+const isPausedByHover = ref(false);
+const progressPercent = ref(0);
+const AUTO_PLAY_INTERVAL = 3800; // ms per card
+let progressTimer: number | null = null;
+
+const startProgressTimer = () => {
+  stopProgressTimer();
+  progressPercent.value = 0;
+  const tickMs = 40;
+  progressTimer = window.setInterval(() => {
+    if (!isAutoPlaying.value || isPausedByHover.value) return;
+    progressPercent.value += (tickMs / AUTO_PLAY_INTERVAL) * 100;
+    if (progressPercent.value >= 100) {
+      progressPercent.value = 0;
+      handleNext();
+    }
+  }, tickMs);
+};
+
+const stopProgressTimer = () => {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+};
+
+const toggleAutoPlay = () => {
+  isAutoPlaying.value = !isAutoPlaying.value;
+  if (!isAutoPlaying.value) {
+    progressPercent.value = 0;
+  }
+};
 
 const features = [
   {
@@ -74,6 +110,7 @@ let mainTl: gsap.core.Timeline | null = null;
 const dealCardToFace = (_fromIndex: number, toIndex: number, direction: 'next' | 'prev') => {
   const card = heroCard.value;
   if (!card) return;
+  progressPercent.value = 0;
 
   // Outgoing animation: active card flips violently up and past the user's camera
   const flyTl = gsap.timeline();
@@ -173,6 +210,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown);
+  startProgressTimer();
   await nextTick();
 
   mainTl = gsap.timeline();
@@ -225,6 +263,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
+  stopProgressTimer();
   if (mainTl) mainTl.kill();
 });
 </script>
@@ -304,8 +343,17 @@ onBeforeUnmount(() => {
         <!-- THE HERO ACTIVE CARD (Snaps directly in front of the viewer) -->
         <div
           ref="heroCard"
+          @mouseenter="isPausedByHover = true"
+          @mouseleave="isPausedByHover = false; handleMouseLeave()"
           class="relative w-full h-full rounded-2xl bg-[#0e0f13]/95 border border-[rgba(255,255,255,0.16)] shadow-[0_25px_70px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.2)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden backdrop-blur-2xl transition-shadow group cursor-grab active:cursor-grabbing"
         >
+          <!-- Top dynamic autoplay progress line -->
+          <div
+            v-if="isAutoPlaying"
+            class="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-[#7170ff] via-[#06b6d4] to-[#10b981] transition-all duration-75 pointer-events-none"
+            :style="{ width: `${progressPercent}%` }"
+          />
+
           <!-- Specular corner highlight -->
           <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-white/5 via-transparent to-transparent pointer-events-none" />
 
@@ -466,8 +514,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Deck Progress Scrubber -->
-      <div class="deck-controls flex items-center justify-center gap-4 mt-6 w-full max-w-xl">
+      <!-- Deck Progress Scrubber & Controls -->
+      <div class="deck-controls flex items-center justify-center gap-3 mt-6 w-full max-w-xl">
         <button
           @click="handlePrev"
           class="p-2 rounded-full ln-btn text-[#8a8f98] hover:text-[#f7f8f8]"
@@ -476,20 +524,35 @@ onBeforeUnmount(() => {
           <ChevronLeft class="w-4 h-4" />
         </button>
 
-        <!-- 4 Steps Interactive Tabs -->
+        <button
+          @click="toggleAutoPlay"
+          class="p-2 rounded-full ln-btn text-[#8a8f98] hover:text-[#f7f8f8]"
+          :title="isAutoPlaying ? '暂停自动播放' : '恢复自动播放'"
+        >
+          <Pause v-if="isAutoPlaying" class="w-4 h-4 text-[#7170ff]" />
+          <Play v-else class="w-4 h-4" />
+        </button>
+
+        <!-- 4 Steps Interactive Tabs with Live Progress Underline -->
         <div class="flex items-center gap-1.5 bg-[rgba(255,255,255,0.03)] p-1 rounded-xl border border-[rgba(255,255,255,0.06)] flex-1 justify-between">
           <button
             v-for="(f, i) in features"
             :key="f.id"
             @click="goTo(i)"
             :class="[
-              'flex-1 py-1 px-2 rounded-lg text-[11px] font-mono transition-all text-center truncate',
+              'relative flex-1 py-1.5 px-2 rounded-lg text-[11px] font-mono transition-all text-center truncate overflow-hidden',
               activeIndex === i
                 ? 'bg-[rgba(255,255,255,0.1)] text-[#f7f8f8] font-semibold shadow-sm'
                 : 'text-[#8a8f98] hover:text-zinc-300'
             ]"
           >
-            0{{ i + 1 }} {{ f.title.slice(0, 4) }}
+            <span>0{{ i + 1 }} {{ f.title.slice(0, 4) }}</span>
+            <!-- Filling progress bar for active card -->
+            <span
+              v-if="activeIndex === i && isAutoPlaying"
+              class="absolute bottom-0 left-0 h-0.5 bg-[#7170ff] transition-all"
+              :style="{ width: `${progressPercent}%` }"
+            />
           </button>
         </div>
 
