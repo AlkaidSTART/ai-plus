@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import {
-  Activity,
   ChevronDown,
-  Layers,
-  Sparkles,
-  Wrench,
-  Zap,
 } from 'lucide-vue-next';
 import type { Marketplace } from '../types';
 
