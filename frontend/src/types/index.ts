@@ -1,3 +1,12 @@
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'owner' | 'pm' | 'supply_chain';
+  roleName: string;
+  avatar?: string;
+}
+
 export type Marketplace = 'US' | 'DE' | 'JP' | 'UK';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'vetoed';
