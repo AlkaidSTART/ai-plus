@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import {
   ChevronDown,
+  Globe,
 } from 'lucide-vue-next';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import productLogo from '../assets/Product_logo.webp';
+import { LOCALE_LABELS, setLocale, type SupportedLocale } from '../i18n';
 import type { Marketplace } from '../types';
 
 defineProps<{
@@ -18,21 +22,27 @@ const emit = defineEmits<{
   (e: 'selectAsin', asin: string): void;
 }>();
 
+const { t, locale } = useI18n();
+
 const marketplaces: Marketplace[] = ['US', 'DE', 'JP', 'UK'];
 
-const navItems = [
-  { key: 'dashboard', label: '全景总览' },
-  { key: 'agent', label: '诊断流程' },
-  { key: 'voc', label: '视觉取证' },
-  { key: 'proposals', label: '双栏改款' },
-  { key: 'financial', label: '财务风控' },
-] as const;
+const navItems = computed(() => [
+  { key: 'dashboard', label: t('nav.overview') },
+  { key: 'agent', label: t('nav.workflow') },
+  { key: 'voc', label: t('nav.visual') },
+  { key: 'proposals', label: t('nav.proposals') },
+  { key: 'financial', label: t('nav.financial') },
+] as const);
 
 const popularAsins = [
   { asin: 'B08N5WRWNW', name: '人体工学椅 (US)' },
   { asin: 'B09V7K4P92', name: '破壁料理机 (DE)' },
   { asin: 'B0CX87M2L1', name: '便携储能电源 (US)' },
 ];
+
+const changeLocale = (target: SupportedLocale) => {
+  setLocale(target);
+};
 </script>
 
 <template>
@@ -76,8 +86,24 @@ const popularAsins = [
           </button>
         </nav>
 
-        <!-- Right Side: Marketplace & Status Dot -->
-        <div class="flex items-center gap-3 shrink-0">
+        <!-- Right Side: Marketplace & Status Dot & i18n Language Switcher -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <!-- i18n Language Selector Dropdown -->
+          <div class="relative flex items-center">
+            <Globe class="w-3.5 h-3.5 text-zinc-500 mr-1.5 hidden md:inline" />
+            <select
+              :value="locale"
+              @change="changeLocale(($event.target as HTMLSelectElement).value as SupportedLocale)"
+              class="appearance-none bg-[rgba(255,255,255,0.03)] hover:bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-md pl-2 pr-6 py-0.5 text-[11px] font-mono text-zinc-300 focus:outline-none cursor-pointer transition-colors"
+              title="Switch Language"
+            >
+              <option v-for="(info, key) in LOCALE_LABELS" :key="key" :value="key" class="bg-[#0f1011] text-zinc-200">
+                {{ info.flag }} {{ info.native }}
+              </option>
+            </select>
+            <ChevronDown class="w-3 h-3 text-zinc-500 absolute right-1.5 pointer-events-none" />
+          </div>
+
           <!-- Marketplace Pills -->
           <div class="flex items-center bg-[rgba(255,255,255,0.03)] p-0.5 rounded-md border border-[rgba(255,255,255,0.06)]">
             <button
@@ -104,7 +130,7 @@ const popularAsins = [
               ]"
             />
             <span class="hidden md:inline text-[11px]">
-              {{ isAgentRunning ? 'Agent 计算中' : '就绪' }}
+              {{ isAgentRunning ? t('header.agentRunning') : t('header.agentReady') }}
             </span>
           </div>
         </div>

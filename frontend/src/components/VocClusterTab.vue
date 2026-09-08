@@ -4,6 +4,7 @@ import {
   Maximize2,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { PainPointCluster, VisualEvidence } from '../types';
 
 defineProps<{
@@ -16,6 +17,8 @@ const emit = defineEmits<{
   (e: 'viewPhotoDetail', evidence: VisualEvidence): void;
 }>();
 
+const { t } = useI18n();
+
 const activeSubTab = ref<'clusters' | 'visual'>('clusters');
 const activeEvidenceModal = ref<VisualEvidence | null>(null);
 </script>
@@ -26,10 +29,10 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[rgba(255,255,255,0.06)]">
       <div>
         <h1 class="text-xl font-medium tracking-tight text-[#f7f8f8]">
-          多模态视觉差评取证与 VOC 深度聚类
+          {{ t('voc.title') }}
         </h1>
         <p class="text-xs text-[#8a8f98] mt-1">
-          bge-m3 语义向量归一与 Claude Vision 买家实拍缺陷定位
+          {{ t('voc.subtitle') }}
         </p>
       </div>
 
@@ -44,7 +47,7 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
               : 'text-[#8a8f98] hover:text-[#f7f8f8]'
           ]"
         >
-          痛点聚类 (Top 5)
+          {{ t('voc.clustersTab') }}
         </button>
         <button
           @click="activeSubTab = 'visual'"
@@ -55,7 +58,7 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
               : 'text-[#8a8f98] hover:text-[#f7f8f8]'
           ]"
         >
-          买家实拍取证 (4 样本)
+          {{ t('voc.visualTab') }}
         </button>
       </div>
     </div>
@@ -78,9 +81,9 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
             </div>
 
             <div class="flex items-center gap-4 text-xs font-mono text-[#8a8f98]">
-              <span>频次: <strong class="text-[#f7f8f8]">{{ cluster.frequency }}</strong></span>
-              <span>占比: {{ (cluster.shareRatio * 100).toFixed(1) }}%</span>
-              <span class="text-amber-400">严重度: {{ cluster.severity.toFixed(1) }}</span>
+              <span>{{ t('dashboard.frequency') }}: <strong class="text-[#f7f8f8]">{{ cluster.frequency }}</strong></span>
+              <span>{{ t('voc.share') }}: {{ (cluster.shareRatio * 100).toFixed(1) }}%</span>
+              <span class="text-amber-400">{{ t('dashboard.rating') }}: {{ cluster.severity.toFixed(1) }}</span>
             </div>
           </div>
 
@@ -91,13 +94,13 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
 
           <div class="pl-6 pt-1 flex items-center justify-between">
             <span class="text-[11px] font-mono text-[#5e626e]">
-              包含 {{ cluster.photoCount }} 张买家实拍缺陷图片
+              {{ t('voc.photoCount', { count: cluster.photoCount }) }}
             </span>
             <button
               @click="emit('viewClusterEvidence', cluster)"
               class="text-xs font-mono text-[#7170ff] hover:text-[#828fff] flex items-center gap-1 transition-colors"
             >
-              <span>查看支撑证据链</span>
+              <span>{{ t('common.viewEvidence') }}</span>
               <ExternalLink class="w-3 h-3" />
             </button>
           </div>
@@ -122,7 +125,7 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
 
           <!-- Discreet Defect Tag -->
           <div class="absolute top-3 left-3 bg-[#08090a]/85 backdrop-blur-md px-2.5 py-1 rounded border border-[rgba(255,255,255,0.1)] text-[11px] font-mono text-[#f7f8f8]">
-            {{ ev.defectType }} · {{ (ev.confidence * 100).toFixed(0) }}% 置信度
+            {{ ev.defectType }} · {{ (ev.confidence * 100).toFixed(0) }}%
           </div>
 
           <!-- Fullscreen Inspect Button -->
@@ -142,7 +145,7 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
           </div>
 
           <p class="text-xs text-[#8a8f98] leading-relaxed">
-            <span class="text-zinc-400 font-medium">成因诊断：</span>{{ ev.rootCause }}
+            <span class="text-zinc-400 font-medium">{{ t('voc.defectCause') }}</span>{{ ev.rootCause }}
           </p>
 
           <p class="text-[11px] text-[#5e626e] italic pt-1">
@@ -162,14 +165,14 @@ const activeEvidenceModal = ref<VisualEvidence | null>(null);
         <div class="flex items-center justify-between text-xs pb-2 border-b border-[rgba(255,255,255,0.06)]">
           <span class="font-medium text-[#f7f8f8]">{{ activeEvidenceModal.title }}</span>
           <button @click="activeEvidenceModal = null" class="text-[#8a8f98] hover:text-[#f7f8f8]">
-            关闭
+            {{ t('common.close') }}
           </button>
         </div>
 
         <img :src="activeEvidenceModal.imageUrl" class="w-full aspect-video object-cover rounded-lg" />
 
         <div class="text-xs text-[#8a8f98] space-y-1">
-          <div><strong class="text-[#f7f8f8]">物理归因：</strong>{{ activeEvidenceModal.rootCause }}</div>
+          <div><strong class="text-[#f7f8f8]">{{ t('voc.defectCause') }}</strong>{{ activeEvidenceModal.rootCause }}</div>
           <div class="italic text-[11px]">"{{ activeEvidenceModal.reviewText }}"</div>
         </div>
       </div>

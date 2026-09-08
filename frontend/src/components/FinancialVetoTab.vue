@@ -5,6 +5,9 @@ import {
   RotateCcw,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const moldCost = ref(12000);
 const moq = ref(3000);
@@ -78,10 +81,10 @@ const applyVetoScenario = () => {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[rgba(255,255,255,0.06)]">
       <div class="space-y-1">
         <h1 class="text-xl font-medium tracking-tight text-[#f7f8f8]">
-          逆向财务约束与现金流否决引擎
+          {{ t('financial.title') }}
         </h1>
         <p class="text-xs text-[#8a8f98]">
-          基于开模成本、起订量 (MOQ) 与回本周期进行动态风险熔断
+          {{ t('financial.subtitle') }}
         </p>
       </div>
 
@@ -90,12 +93,12 @@ const applyVetoScenario = () => {
           @click="applyVetoScenario"
           class="ln-btn px-3 py-1.5 text-xs text-rose-400 hover:text-rose-300"
         >
-          高危熔断案例 (Blender)
+          {{ t('financial.caseBlender') }}
         </button>
         <button
           @click="resetDefaults"
           class="p-1.5 ln-btn"
-          title="重置"
+          :title="t('common.retry')"
         >
           <RotateCcw class="w-3.5 h-3.5" />
         </button>
@@ -116,21 +119,21 @@ const applyVetoScenario = () => {
           <AlertOctagon v-if="isVetoed" class="w-4 h-4 text-rose-400" />
           <CheckCircle2 v-else class="w-4 h-4 text-emerald-400" />
           <span class="text-xs font-semibold text-[#f7f8f8]">
-            {{ isVetoed ? '触发逆向财务熔断 (VETOED)' : '财务准入审核通过 (APPROVED)' }}
+            {{ isVetoed ? t('financial.vetoedTitle') : t('financial.approvedTitle') }}
           </span>
         </div>
 
         <span class="text-xs font-mono text-[#8a8f98]">
-          测算回本: {{ calculatedPaybackMonths }} 个月 (阈值: {{ targetPaybackMonths }} 个月)
+          {{ t('financial.calculatedPayback', { months: calculatedPaybackMonths, threshold: targetPaybackMonths }) }}
         </span>
       </div>
 
       <p class="text-xs text-[#8a8f98] leading-relaxed">
         <span v-if="isVetoed">
-          开模成本过重且回本周期超出安全边际，建议阻断高额开模，降级为【免开模小改/仅优化包装】。
+          {{ t('financial.vetoedDesc') }}
         </span>
         <span v-else>
-          物流包装 Tier Down 降本与物理改款协同良好，单件净毛利提供充沛安全垫，预计 3.8 个月完成模具回本。
+          {{ t('financial.approvedDesc') }}
         </span>
       </p>
     </div>
@@ -140,14 +143,14 @@ const applyVetoScenario = () => {
       <!-- Left (7 cols): Clean Sliders -->
       <div class="lg:col-span-7 ln-surface p-6 space-y-5">
         <div class="text-xs font-medium text-[#f7f8f8] pb-2 border-b border-[rgba(255,255,255,0.06)]">
-          供应链与资金参数微调
+          {{ t('financial.parametersTitle') }}
         </div>
 
         <div class="space-y-4 text-xs">
           <!-- Mold Cost -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-[#8a8f98]">模具开模总费用</span>
+              <span class="text-[#8a8f98]">{{ t('financial.moldCost') }}</span>
               <span class="font-mono text-[#f7f8f8]">${{ moldCost.toLocaleString() }}</span>
             </div>
             <input
@@ -163,8 +166,8 @@ const applyVetoScenario = () => {
           <!-- MOQ -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-[#8a8f98]">首批生产订货量 (MOQ)</span>
-              <span class="font-mono text-[#f7f8f8]">{{ moq.toLocaleString() }} 件</span>
+              <span class="text-[#8a8f98]">{{ t('financial.moq') }}</span>
+              <span class="font-mono text-[#f7f8f8]">{{ moq.toLocaleString() }} {{ t('common.units') }}</span>
             </div>
             <input
               v-model.number="moq"
@@ -179,7 +182,7 @@ const applyVetoScenario = () => {
           <!-- Unit Selling Price -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-[#8a8f98]">终端零售单价</span>
+              <span class="text-[#8a8f98]">{{ t('financial.retailPrice') }}</span>
               <span class="font-mono text-[#f7f8f8]">${{ unitPrice.toFixed(2) }}</span>
             </div>
             <input
@@ -195,8 +198,8 @@ const applyVetoScenario = () => {
           <!-- Target Payback -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-[#8a8f98]">期望最长回本周期</span>
-              <span class="font-mono text-[#f7f8f8]">{{ targetPaybackMonths }} 个月</span>
+              <span class="text-[#8a8f98]">{{ t('financial.targetPayback') }}</span>
+              <span class="font-mono text-[#f7f8f8]">{{ targetPaybackMonths }} {{ t('common.months') }}</span>
             </div>
             <input
               v-model.number="targetPaybackMonths"
@@ -213,22 +216,22 @@ const applyVetoScenario = () => {
       <!-- Right (5 cols): Dynamic Output Summary -->
       <div class="lg:col-span-5 ln-surface p-6 space-y-4">
         <div class="text-xs font-medium text-[#f7f8f8] pb-2 border-b border-[rgba(255,255,255,0.06)]">
-          动态测算指标
+          {{ t('financial.metricsTitle') }}
         </div>
 
         <div class="space-y-3 font-mono text-xs text-[#8a8f98]">
           <div class="flex items-center justify-between">
-            <span>单件模具摊销</span>
+            <span>{{ t('financial.moldAmortization') }}</span>
             <span class="text-[#f7f8f8]">${{ amortizedMoldCost.toFixed(2) }}</span>
           </div>
 
           <div class="flex items-center justify-between">
-            <span>物流降本收益 / 件</span>
+            <span>{{ t('financial.logisticsBenefit') }}</span>
             <span class="text-emerald-400">-${{ fbaSavingsPerUnit.toFixed(2) }}</span>
           </div>
 
           <div class="flex items-center justify-between">
-            <span>测算毛利率</span>
+            <span>{{ t('financial.projectedMargin') }}</span>
             <span
               :class="projectedMarginPercent < 20 ? 'text-rose-400 font-bold' : 'text-[#f7f8f8] font-bold'"
             >
@@ -237,16 +240,16 @@ const applyVetoScenario = () => {
           </div>
 
           <div class="flex items-center justify-between">
-            <span>盈亏平衡销量</span>
-            <span class="text-[#f7f8f8]">{{ breakevenUnits }} 件</span>
+            <span>{{ t('financial.breakeven') }}</span>
+            <span class="text-[#f7f8f8]">{{ breakevenUnits }} {{ t('common.units') }}</span>
           </div>
 
           <div class="flex items-center justify-between pt-2 border-t border-[rgba(255,255,255,0.06)]">
-            <span class="text-zinc-300 font-medium">预计回本用时</span>
+            <span class="text-zinc-300 font-medium">{{ t('financial.estimatedPayback') }}</span>
             <span
               :class="isVetoed ? 'text-rose-400 font-bold text-sm' : 'text-emerald-400 font-bold text-sm'"
             >
-              {{ calculatedPaybackMonths }} 个月
+              {{ calculatedPaybackMonths }} {{ t('common.months') }}
             </span>
           </div>
         </div>
@@ -256,11 +259,11 @@ const applyVetoScenario = () => {
     <!-- Bottom Quiet Historical Backtest Summary -->
     <div class="ln-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
       <div class="space-y-0.5">
-        <div class="text-[#f7f8f8] font-medium">历史时序后验回测 (Backtest)</div>
-        <div class="text-[#8a8f98] text-[11px]">截取 2025-Q1 评论盲测推荐，验证后续 12 个月真实爆款走势</div>
+        <div class="text-[#f7f8f8] font-medium">{{ t('financial.backtestTitle') }}</div>
+        <div class="text-[#8a8f98] text-[11px]">{{ t('financial.backtestDesc') }}</div>
       </div>
       <div class="font-mono text-emerald-400 font-medium shrink-0">
-        后验吻合度评分: 93.6%
+        {{ t('financial.backtestScore') }}
       </div>
     </div>
   </div>

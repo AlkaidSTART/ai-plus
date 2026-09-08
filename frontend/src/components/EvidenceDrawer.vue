@@ -4,6 +4,7 @@ import {
   X,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 defineProps<{
   isOpen: boolean;
@@ -14,6 +15,8 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void;
 }>();
+
+const { t } = useI18n();
 
 const ratingFilter = ref<number | null>(null);
 
@@ -100,7 +103,7 @@ const filteredReviews = computed(() => {
     <!-- Header -->
     <div class="space-y-3 pb-4 border-b border-[rgba(255,255,255,0.06)]">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-medium text-[#f7f8f8]">全链路证据溯源</h2>
+        <h2 class="text-sm font-medium text-[#f7f8f8]">{{ t('drawer.title') }}</h2>
         <button
           @click="emit('close')"
           class="p-1 text-[#8a8f98] hover:text-[#f7f8f8] transition-colors"
@@ -110,12 +113,12 @@ const filteredReviews = computed(() => {
       </div>
 
       <div class="text-xs text-[#8a8f98] line-clamp-1 font-mono">
-        关联项: <span class="text-[#f7f8f8]">{{ targetTitle }}</span>
+        {{ t('drawer.related') }} <span class="text-[#f7f8f8]">{{ targetTitle }}</span>
       </div>
 
       <!-- Rating Filter -->
       <div class="flex items-center gap-1.5 pt-1 text-xs font-mono">
-        <span class="text-[#5e626e] text-[11px]">评级:</span>
+        <span class="text-[#5e626e] text-[11px]">{{ t('drawer.ratingFilter') }}</span>
         <button
           @click="ratingFilter = null"
           :class="[
@@ -123,7 +126,7 @@ const filteredReviews = computed(() => {
             ratingFilter === null ? 'bg-[rgba(255,255,255,0.1)] text-[#f7f8f8]' : 'text-[#8a8f98] hover:text-[#f7f8f8]'
           ]"
         >
-          全部
+          {{ t('drawer.all') }}
         </button>
         <button
           @click="ratingFilter = 1"
@@ -132,7 +135,7 @@ const filteredReviews = computed(() => {
             ratingFilter === 1 ? 'bg-[rgba(255,255,255,0.1)] text-[#f7f8f8]' : 'text-[#8a8f98] hover:text-[#f7f8f8]'
           ]"
         >
-          ★ 1星
+          {{ t('drawer.star1') }}
         </button>
         <button
           @click="ratingFilter = 2"
@@ -141,7 +144,7 @@ const filteredReviews = computed(() => {
             ratingFilter === 2 ? 'bg-[rgba(255,255,255,0.1)] text-[#f7f8f8]' : 'text-[#8a8f98] hover:text-[#f7f8f8]'
           ]"
         >
-          ★ 2星
+          {{ t('drawer.star2') }}
         </button>
       </div>
     </div>
@@ -174,12 +177,12 @@ const filteredReviews = computed(() => {
 
     <!-- Footer -->
     <div class="pt-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between text-[11px] text-[#5e626e] font-mono">
-      <span>100% 原始 Review 绑定</span>
+      <span>{{ t('drawer.verifiedReview') }}</span>
       <button
         @click="emit('close')"
         class="ln-btn px-3 py-1 text-xs"
       >
-        关闭
+        {{ t('common.close') }}
       </button>
     </div>
   </aside>

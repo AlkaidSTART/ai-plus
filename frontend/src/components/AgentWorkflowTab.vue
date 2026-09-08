@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-vue-next';
 import { onBeforeUnmount, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { AgentNode, InsightTask, Marketplace } from '../types';
 
 const props = defineProps<{
@@ -19,6 +20,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'taskUpdated', task: InsightTask): void;
 }>();
+
+const { t } = useI18n();
 
 const inputAsin = ref(props.currentTask.asin);
 const selectedMarketplace = ref<Marketplace>(props.currentTask.marketplace);
@@ -116,10 +119,10 @@ onBeforeUnmount(() => {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[rgba(255,255,255,0.06)]">
       <div class="space-y-1">
         <h1 class="text-xl font-medium tracking-tight text-[#f7f8f8]">
-          LangGraph 多智能体诊断流程
+          {{ t('workflow.title') }}
         </h1>
         <p class="text-xs text-[#8a8f98]">
-          数据采集、语义聚类、视觉取证、双栏改款与逆向风控 5 节点闭环编排
+          {{ t('workflow.subtitle') }}
         </p>
       </div>
 
@@ -150,7 +153,7 @@ onBeforeUnmount(() => {
           class="ln-btn-primary px-3.5 py-1.5 flex items-center gap-1.5"
         >
           <Play class="w-3 h-3 fill-current" />
-          <span>执行流程</span>
+          <span>{{ t('workflow.runAgent') }}</span>
         </button>
 
         <button
@@ -159,13 +162,13 @@ onBeforeUnmount(() => {
           class="ln-btn px-3.5 py-1.5 flex items-center gap-1.5 text-amber-400"
         >
           <Pause class="w-3 h-3 fill-current" />
-          <span>暂停</span>
+          <span>{{ t('workflow.pauseAgent') }}</span>
         </button>
 
         <button
           @click="runSimulation"
           class="p-1.5 ln-btn"
-          title="重试"
+          :title="t('common.retry')"
         >
           <RotateCcw class="w-3.5 h-3.5" />
         </button>
@@ -204,7 +207,7 @@ onBeforeUnmount(() => {
               {{ node.name }}
             </div>
             <div class="text-[10px] font-mono text-[#5e626e]">
-              {{ node.durationMs ? `${node.durationMs}ms` : '就绪' }}
+              {{ node.durationMs ? `${node.durationMs}ms` : t('common.ready') }}
             </div>
           </div>
 
@@ -221,42 +224,42 @@ onBeforeUnmount(() => {
       <!-- Node Inspector Card -->
       <div class="ln-surface p-5 space-y-3">
         <div class="flex items-center justify-between text-xs pb-2 border-b border-[rgba(255,255,255,0.06)]">
-          <span class="font-medium text-[#f7f8f8]">节点状态检视</span>
+          <span class="font-medium text-[#f7f8f8]">{{ t('workflow.nodeInspector') }}</span>
           <span class="font-mono text-[#8a8f98]">Node: {{ activeNodeKey }}</span>
         </div>
 
         <div class="text-xs font-mono space-y-2 text-[#8a8f98] pt-1">
           <div v-if="activeNodeKey === 'ingestion'" class="space-y-1.5">
-            <div class="text-[#f7f8f8]">数据采集源：Amazon {{ currentTask.marketplace }}</div>
-            <div>• 清洗评论样本：3,840 条</div>
-            <div>• 买家缺陷实拍：142 张</div>
-            <div>• 类目排名：BSR #{{ currentTask.bsr }}</div>
+            <div class="text-[#f7f8f8]">Data: Amazon {{ currentTask.marketplace }}</div>
+            <div>• Verified Reviews: 3,840</div>
+            <div>• Customer Defect Photos: 142</div>
+            <div>• Category BSR: #{{ currentTask.bsr }}</div>
           </div>
 
           <div v-else-if="activeNodeKey === 'clustering'" class="space-y-1.5">
-            <div class="text-[#f7f8f8]">模型：bge-m3 (Dense 1024-d 向量)</div>
-            <div>• 归纳痛点聚类：Top 5</div>
-            <div>• 峰值质量抱怨：3D 扶手卡扣脆断 (占比 38.5%)</div>
-            <div>• 多语言对齐：EN / DE / JA 映射至统一中文本体</div>
+            <div class="text-[#f7f8f8]">Model: bge-m3 (Dense 1024-d)</div>
+            <div>• Clusters: Top 5</div>
+            <div>• Dominant Complaint: 3D Armrest ratchet fracture (38.5%)</div>
+            <div>• Cross-Lingual: EN / DE / JA mapped to schema</div>
           </div>
 
           <div v-else-if="activeNodeKey === 'vlm_inspection'" class="space-y-1.5">
-            <div class="text-[#f7f8f8]">多模态视觉：Claude 3.5 Sonnet Vision</div>
-            <div>• 视觉定位样本：89 处机械损坏特征</div>
-            <div>• 物理成因：PA6+GF 倒角 R 角过小，剪切应力集中</div>
+            <div class="text-[#f7f8f8]">VLM: Claude 3.5 Sonnet Vision</div>
+            <div>• Defect Signatures: 89 instances</div>
+            <div>• Root-Cause: PA6+GF fillet radius insufficient</div>
           </div>
 
           <div v-else-if="activeNodeKey === 'dual_column_proposal'" class="space-y-1.5">
-            <div class="text-[#f7f8f8]">改款决策：双栏工程方案已就绪</div>
-            <div>• 产品本体：Zamak-3 锌合金骨架 + 硅胶阻尼滚轮</div>
-            <div>• 包装履约：外箱长边缩减 6.5cm，规避超规 FBA 费用</div>
+            <div class="text-[#f7f8f8]">Proposals: Factory RFC Ready</div>
+            <div>• Physical: Zamak-3 zinc skeleton + silicone damping</div>
+            <div>• Packaging: Outer carton tier-down (-6.5cm, saves $4.60)</div>
           </div>
 
           <div v-else class="space-y-1.5">
-            <div class="text-emerald-400">逆向风控状态：APPROVED (通过)</div>
-            <div>• 开模总费用：$12,000 USD</div>
-            <div>• 预计回本周期：3.8 个月 (安全阈值: 6.0 个月)</div>
-            <div>• 决议建议：准予立项开模</div>
+            <div class="text-emerald-400">Financial Gate: APPROVED</div>
+            <div>• Tooling Mold Cost: $12,000 USD</div>
+            <div>• Estimated Payback: 3.8 mo (Threshold: 6.0 mo)</div>
+            <div>• Verdict: Approved for production tooling</div>
           </div>
         </div>
       </div>
@@ -266,9 +269,9 @@ onBeforeUnmount(() => {
         <div class="flex items-center justify-between text-xs pb-2 border-b border-[rgba(255,255,255,0.06)]">
           <div class="flex items-center gap-1.5 text-[#f7f8f8] font-medium">
             <Terminal class="w-3.5 h-3.5 text-[#8a8f98]" />
-            <span>实时事件日志</span>
+            <span>{{ t('workflow.eventLogs') }}</span>
           </div>
-          <span class="text-[11px] font-mono text-[#5e626e]">SSE 直连</span>
+          <span class="text-[11px] font-mono text-[#5e626e]">{{ t('workflow.sseConnected') }}</span>
         </div>
 
         <div class="h-48 overflow-y-auto space-y-1.5 font-mono text-[11px] text-[#8a8f98] scrollbar-thin select-text">
