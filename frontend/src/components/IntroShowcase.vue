@@ -16,7 +16,7 @@ import {
   TrendingUp,
   Wrench,
 } from 'lucide-vue-next';
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import productLogo from '../assets/Product_logo.webp';
 
 const emit = defineEmits<{
@@ -24,47 +24,19 @@ const emit = defineEmits<{
   (e: 'openAuth'): void;
 }>();
 
+const containerRef = ref<HTMLElement | null>(null);
+const cardsContainerRef = ref<HTMLElement | null>(null);
+const progressBarRef = ref<HTMLElement | null>(null);
+
 const activeIndex = ref(0);
-const heroCard = ref<HTMLElement | null>(null);
-
 const isAutoPlaying = ref(true);
-const isPausedByHover = ref(false);
-const progressPercent = ref(0);
-const AUTO_PLAY_INTERVAL = 3800; // ms per card
-let progressTimer: number | null = null;
 
-const startProgressTimer = () => {
-  stopProgressTimer();
-  progressPercent.value = 0;
-  const tickMs = 40;
-  progressTimer = window.setInterval(() => {
-    if (!isAutoPlaying.value || isPausedByHover.value) return;
-    progressPercent.value += (tickMs / AUTO_PLAY_INTERVAL) * 100;
-    if (progressPercent.value >= 100) {
-      progressPercent.value = 0;
-      handleNext();
-    }
-  }, tickMs);
-};
-
-const stopProgressTimer = () => {
-  if (progressTimer) {
-    clearInterval(progressTimer);
-    progressTimer = null;
-  }
-};
-
-const toggleAutoPlay = () => {
-  isAutoPlaying.value = !isAutoPlaying.value;
-  if (!isAutoPlaying.value) {
-    progressPercent.value = 0;
-  }
-};
+const CARD_DURATION = 4.2; // seconds per card
 
 const features = [
   {
     id: 0,
-    tag: 'PILLAR 01 · SPATIO-TEMPORAL INGESTION',
+    tag: 'PILLAR 01 · SPATIO-TEMPORAL',
     icon: Layers,
     title: '跨平台全景时序穿透',
     tagline: 'Amazon · TikTok Shop · Temu 同品类动态对齐',
@@ -74,7 +46,7 @@ const features = [
   },
   {
     id: 1,
-    tag: 'PILLAR 02 · MULTIMODAL VLM FORENSICS',
+    tag: 'PILLAR 02 · MULTIMODAL FORENSICS',
     icon: Sparkles,
     title: '多模态视觉差评取证',
     tagline: 'Claude Vision 直接从买家实拍图定位结构破损',
@@ -104,193 +76,265 @@ const features = [
   },
 ];
 
-let mainTl: gsap.core.Timeline | null = null;
+let ctx: gsap.Context | null = null;
+let progressTween: gsap.core.Tween | null = null;
+let tiltX: ((val: number) => void) | null = null;
+let tiltY: ((val: number) => void) | null = null;
 
-// Deal active card directly toward the viewer's face with dramatic 3D velocity
-const dealCardToFace = (_fromIndex: number, toIndex: number, direction: 'next' | 'prev') => {
-  const card = heroCard.value;
-  if (!card) return;
-  progressPercent.value = 0;
+// Silky 3D transform layout for all 4 cards simultaneously
+const updateCardsLayout = (direction: 'next' | 'prev' = 'next') => {
+  if (!cardsContainerRef.value) return;
+  const cards = cardsContainerRef.value.querySelectorAll<HTMLElement>('.deck-card-item');
 
-  // Outgoing animation: active card flips violently up and past the user's camera
-  const flyTl = gsap.timeline();
+  cards.forEach((card, idx) => {
+    // Relative offset in cyclical loop: -1 (outgoing), 0 (active), 1 (next), 2 (last)
+    let offset = idx - activeIndex.value;
+    if (offset < -1) offset += features.length;
+    if (offset > 2) offset -= features.length;
 
-  flyTl.to(card, {
-    duration: 0.22,
-    ease: 'power3.in',
-    z: 320,
-    y: direction === 'next' ? -120 : 120,
-    rotationX: direction === 'next' ? -18 : 18,
-    scale: 1.15,
-    opacity: 0,
+    const isCenter = offset === 0;
+
+    let targetZ = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let targetRotY = 0;
+    let targetScale = 1;
+    let targetOpacity = 1;
+    let zIndex = 10;
+
+    if (isCenter) {
+      targetZ = 0;
+      targetX = 0;
+      targetY = 0;
+      targetRotY = 0;
+      targetScale = 1;
+      targetOpacity = 1;
+      zIndex = 20;
+    } else if (offset === 1) {
+      targetZ = -140;
+      targetX = 64;
+      targetY = 16;
+      targetRotY = -8;
+      targetScale = 0.92;
+      targetOpacity = 0.65;
+      zIndex = 15;
+    } else if (offset === 2) {
+      targetZ = -260;
+      targetX = 120;
+      targetY = 32;
+      targetRotY = -14;
+      targetScale = 0.84;
+      targetOpacity = 0.35;
+      zIndex = 10;
+    } else {
+      // Outgoing card (offset < 0): flies past viewer smoothly
+      targetZ = 200;
+      targetX = direction === 'next' ? -90 : 90;
+      targetY = -30;
+      targetRotY = direction === 'next' ? 12 : -12;
+      targetScale = 1.08;
+      targetOpacity = 0;
+      zIndex = 5;
+    }
+
+    gsap.to(card, {
+      x: targetX,
+      y: targetY,
+      z: targetZ,
+      rotationY: targetRotY,
+      scale: targetScale,
+      opacity: targetOpacity,
+      duration: 0.7,
+      ease: 'power3.out',
+      overwrite: 'auto',
+    });
+
+    card.style.zIndex = `${zIndex}`;
+    card.style.pointerEvents = isCenter ? 'auto' : 'none';
+  });
+
+  restartProgressBar();
+};
+
+const restartProgressBar = () => {
+  if (!progressBarRef.value) return;
+  progressTween?.kill();
+
+  if (!isAutoPlaying.value) {
+    gsap.set(progressBarRef.value, { scaleX: 0 });
+    return;
+  }
+
+  gsap.set(progressBarRef.value, { scaleX: 0, transformOrigin: 'left center' });
+  progressTween = gsap.to(progressBarRef.value, {
+    scaleX: 1,
+    duration: CARD_DURATION,
+    ease: 'none',
     onComplete: () => {
-      activeIndex.value = toIndex;
-
-      // Incoming animation: new card slams forward from deep space right into viewer's face
-      gsap.fromTo(
-        card,
-        {
-          z: -420,
-          y: direction === 'next' ? 90 : -90,
-          rotationX: direction === 'next' ? 14 : -14,
-          scale: 0.82,
-          opacity: 0,
-        },
-        {
-          duration: 0.55,
-          ease: 'back.out(1.4)',
-          z: 0,
-          y: 0,
-          rotationX: 0,
-          scale: 1,
-          opacity: 1,
-          clearProps: 'transform',
-        }
-      );
+      goToNext();
     },
   });
 };
 
-const goTo = (index: number) => {
+const goToNext = () => {
+  activeIndex.value = (activeIndex.value + 1) % features.length;
+  updateCardsLayout('next');
+};
+
+const goToPrev = () => {
+  activeIndex.value = (activeIndex.value - 1 + features.length) % features.length;
+  updateCardsLayout('prev');
+};
+
+const goToIndex = (index: number) => {
   if (index === activeIndex.value) return;
   const dir = index > activeIndex.value ? 'next' : 'prev';
-  dealCardToFace(activeIndex.value, index, dir);
+  activeIndex.value = index;
+  updateCardsLayout(dir);
 };
 
-const handleNext = () => {
-  const nextIdx = (activeIndex.value + 1) % features.length;
-  dealCardToFace(activeIndex.value, nextIdx, 'next');
+const toggleAutoPlay = () => {
+  isAutoPlaying.value = !isAutoPlaying.value;
+  if (isAutoPlaying.value) {
+    restartProgressBar();
+  } else {
+    progressTween?.pause();
+    if (progressBarRef.value) {
+      gsap.to(progressBarRef.value, { scaleX: 0, duration: 0.2 });
+    }
+  }
 };
 
-const handlePrev = () => {
-  const prevIdx = (activeIndex.value - 1 + features.length) % features.length;
-  dealCardToFace(activeIndex.value, prevIdx, 'prev');
+const handleCardMouseEnter = () => {
+  if (isAutoPlaying.value) {
+    progressTween?.pause();
+  }
 };
 
-// Subtle 3D mouse parallax tilt
+const handleCardMouseLeave = () => {
+  if (isAutoPlaying.value) {
+    progressTween?.resume();
+  }
+  // Reset mouse tilt smoothly
+  if (cardsContainerRef.value) {
+    gsap.to(cardsContainerRef.value, {
+      rotationX: 0,
+      rotationY: 0,
+      duration: 0.6,
+      ease: 'power2.out',
+    });
+  }
+};
+
 const handleMouseMove = (e: MouseEvent) => {
-  if (!heroCard.value) return;
-  const rect = heroCard.value.getBoundingClientRect();
+  if (!cardsContainerRef.value || !tiltX || !tiltY) return;
+  const rect = cardsContainerRef.value.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2;
   const centerY = rect.top + rect.height / 2;
-  const mouseX = e.clientX - centerX;
-  const mouseY = e.clientY - centerY;
+  const offsetX = (e.clientX - centerX) / (rect.width / 2);
+  const offsetY = (e.clientY - centerY) / (rect.height / 2);
 
-  const tiltX = (mouseY / (rect.height / 2)) * -6;
-  const tiltY = (mouseX / (rect.width / 2)) * 6;
-
-  gsap.to(heroCard.value, {
-    duration: 0.35,
-    ease: 'power1.out',
-    rotationX: tiltX,
-    rotationY: tiltY,
-    transformPerspective: 1200,
-  });
-};
-
-const handleMouseLeave = () => {
-  if (!heroCard.value) return;
-  gsap.to(heroCard.value, {
-    duration: 0.6,
-    ease: 'power2.out',
-    rotationX: 0,
-    rotationY: 0,
-  });
+  tiltX(offsetY * -5);
+  tiltY(offsetX * 5);
 };
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-    handleNext();
+    goToNext();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-    handlePrev();
+    goToPrev();
   } else if (e.key === 'Enter') {
     emit('enter');
   }
 };
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
-  startProgressTimer();
-  await nextTick();
 
-  mainTl = gsap.timeline();
+  ctx = gsap.context(() => {
+    // QuickTo for ultra-smooth 120fps mouse parallax without creating new tweens
+    if (cardsContainerRef.value) {
+      tiltX = gsap.quickTo(cardsContainerRef.value, 'rotationX', { duration: 0.4, ease: 'power2.out' });
+      tiltY = gsap.quickTo(cardsContainerRef.value, 'rotationY', { duration: 0.4, ease: 'power2.out' });
+    }
 
-  // 1. Scene entrance
-  mainTl.from('.cinematic-brand', {
-    y: -20,
-    opacity: 0,
-    duration: 0.6,
-    ease: 'power2.out',
-  });
+    // High-end entrance choreography
+    const entranceTl = gsap.timeline();
 
-  mainTl.from(
-    '.cinematic-hero-text',
-    {
-      y: 35,
+    entranceTl.from('.cinematic-header', {
+      y: -16,
       opacity: 0,
-      duration: 0.75,
-      stagger: 0.12,
-      ease: 'power3.out',
-    },
-    '-=0.3'
-  );
-
-  // 2. The Hero Card explodes forward into face
-  mainTl.from(
-    heroCard.value,
-    {
-      z: -600,
-      scale: 0.65,
-      rotationX: 25,
-      opacity: 0,
-      duration: 0.9,
-      ease: 'expo.out',
-    },
-    '-=0.4'
-  );
-
-  mainTl.from(
-    '.deck-controls',
-    {
-      y: 20,
-      opacity: 0,
-      duration: 0.5,
+      duration: 0.6,
       ease: 'power2.out',
-    },
-    '-=0.3'
-  );
+    });
+
+    entranceTl.from(
+      '.cinematic-title',
+      {
+        y: 28,
+        opacity: 0,
+        duration: 0.7,
+        stagger: 0.1,
+        ease: 'power3.out',
+      },
+      '-=0.3'
+    );
+
+    entranceTl.from(
+      '.deck-card-item',
+      {
+        z: -300,
+        scale: 0.8,
+        opacity: 0,
+        duration: 0.8,
+        stagger: 0.08,
+        ease: 'power3.out',
+        onComplete: () => {
+          updateCardsLayout();
+        },
+      },
+      '-=0.4'
+    );
+
+    entranceTl.from(
+      '.cinematic-controls',
+      {
+        y: 16,
+        opacity: 0,
+        duration: 0.5,
+        ease: 'power2.out',
+      },
+      '-=0.3'
+    );
+  }, containerRef.value || undefined);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
-  stopProgressTimer();
-  if (mainTl) mainTl.kill();
+  progressTween?.kill();
+  ctx?.revert();
 });
 </script>
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex flex-col justify-between bg-[#060709] text-[#f7f8f8] overflow-hidden select-none"
+    ref="containerRef"
+    class="fixed inset-0 z-50 flex flex-col justify-between bg-[#07080a] text-[#f7f8f8] overflow-hidden select-none"
     @mousemove="handleMouseMove"
-    @mouseleave="handleMouseLeave"
   >
-    <!-- Cinematic Atmosphere: Anamorphic Horizontal Laser Flare + Spatial Grid -->
+    <!-- Background Texture: Architectural Subtle Grid & Quiet Ambient Blur -->
     <div class="absolute inset-0 pointer-events-none">
-      <!-- Deep space grid -->
-      <div class="absolute inset-0 opacity-[0.14] bg-[radial-gradient(#393e4f_1px,transparent_1px)] [background-size:28px_28px]" />
-
-      <!-- High-tech laser streak across top -->
-      <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#7170ff]/60 to-transparent" />
-      <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-[#7170ff]/15 via-[#06b6d4]/8 to-transparent blur-[120px]" />
+      <div class="absolute inset-0 opacity-[0.08] bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:32px_32px]" />
+      <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[720px] h-[360px] bg-[#5e6ad2]/10 rounded-full blur-[140px]" />
     </div>
 
     <!-- Top Minimalist Bar -->
-    <header class="cinematic-brand relative z-20 max-w-6xl mx-auto w-full px-6 py-5 flex items-center justify-between border-b border-[rgba(255,255,255,0.05)]">
+    <header class="cinematic-header relative z-20 max-w-6xl mx-auto w-full px-6 py-5 flex items-center justify-between border-b border-[rgba(255,255,255,0.06)]">
       <div class="flex items-center gap-3">
-        <img :src="productLogo" alt="InsightX" class="h-8 w-auto object-contain drop-shadow-[0_0_12px_rgba(113,112,255,0.3)]" />
+        <img :src="productLogo" alt="InsightX" class="h-8 w-auto object-contain" />
         <span class="text-zinc-600 font-mono">/</span>
-        <span class="text-xs font-mono tracking-widest text-[#8a8f98] uppercase">
-          AI Industrial Decision System
+        <span class="text-[11px] font-mono tracking-wider text-[#8a8f98] uppercase">
+          Cross-Border AI Decision System
         </span>
       </div>
 
@@ -305,125 +349,100 @@ onBeforeUnmount(() => {
 
         <button
           @click="emit('enter')"
-          class="ln-btn-primary px-3.5 py-1.5 flex items-center gap-1.5 text-xs font-medium shadow-[0_0_20px_rgba(113,112,255,0.25)]"
+          class="ln-btn-primary px-3.5 py-1.5 flex items-center gap-1.5 text-xs font-medium"
         >
-          <span>直接进入大盘</span>
+          <span>进入系统大盘</span>
           <ArrowRight class="w-3.5 h-3.5" />
         </button>
       </div>
     </header>
 
-    <!-- Center Stage: The Hero Card Dealt Directly Into Your Face -->
-    <main class="relative z-20 max-w-5xl mx-auto w-full px-6 flex flex-col items-center justify-center flex-1 py-3">
-      <!-- Impact Headlines -->
-      <div class="text-center space-y-2 mb-6 max-w-3xl">
-        <div class="cinematic-hero-text inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[11px] font-mono text-[#8a8f98]">
-          <span class="w-2 h-2 rounded-full bg-[#7170ff] animate-ping" />
-          <span>破除“只荐爆款不控风险”死结 · 工贸一体专属工业级闭环</span>
+    <!-- Center Stage -->
+    <main class="relative z-20 max-w-5xl mx-auto w-full px-6 flex flex-col items-center justify-center flex-1 py-4">
+      <!-- Title Block -->
+      <div class="text-center space-y-2 mb-6 max-w-2xl">
+        <div class="cinematic-title inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[11px] font-mono text-[#8a8f98]">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#7170ff] animate-pulse" />
+          <span>工贸一体出海专属 · 拒绝盲目跟风开模</span>
         </div>
 
-        <h1 class="cinematic-hero-text text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-[#f7f8f8] leading-tight">
+        <h1 class="cinematic-title text-2xl sm:text-4xl font-semibold tracking-tight text-[#f7f8f8] leading-tight">
           从海量差评取证，到工厂工程图纸
         </h1>
 
-        <p class="cinematic-hero-text text-xs sm:text-sm text-[#8a8f98] max-w-xl mx-auto leading-relaxed">
-          打通多源时序感知、多模态视觉定损、双栏改款决策与逆向财务熔断。
+        <p class="cinematic-title text-xs sm:text-sm text-[#8a8f98] max-w-lg mx-auto leading-relaxed">
+          基于多模态视觉定损与双栏改款决策，为跨境制造交付工程级立项清单与财务熔断。
         </p>
       </div>
 
-      <!-- 3D Card Stage with High Perspective Depth -->
+      <!-- 3D Card Stack Container (All 4 cards rendered together for silky GPU transform) -->
       <div
-        ref="cardStage"
+        ref="cardsContainerRef"
+        @mouseenter="handleCardMouseEnter"
+        @mouseleave="handleCardMouseLeave"
         class="relative w-full max-w-2xl h-[380px] sm:h-[400px] flex items-center justify-center [perspective:1400px] [transform-style:preserve-3d]"
+        style="will-change: transform;"
       >
-        <!-- Background Shadow Deck (Giving physical multi-card depth behind active card) -->
-        <div class="absolute w-[92%] sm:w-[96%] h-full rounded-2xl bg-[#090a0e]/60 border border-[rgba(255,255,255,0.04)] [transform:translateZ(-140px)_translateY(16px)_scale(0.92)] pointer-events-none opacity-60" />
-        <div class="absolute w-[86%] sm:w-[90%] h-full rounded-2xl bg-[#07080b]/50 border border-[rgba(255,255,255,0.02)] [transform:translateZ(-260px)_translateY(28px)_scale(0.85)] pointer-events-none opacity-30" />
-
-        <!-- THE HERO ACTIVE CARD (Snaps directly in front of the viewer) -->
+        <!-- Card 0: Spatio-Temporal Ingestion -->
         <div
-          ref="heroCard"
-          @mouseenter="isPausedByHover = true"
-          @mouseleave="isPausedByHover = false; handleMouseLeave()"
-          class="relative w-full h-full rounded-2xl bg-[#0e0f13]/95 border border-[rgba(255,255,255,0.16)] shadow-[0_25px_70px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.2)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden backdrop-blur-2xl transition-shadow group cursor-grab active:cursor-grabbing"
+          class="deck-card-item absolute inset-0 rounded-2xl bg-[#0d0e12]/95 border border-[rgba(255,255,255,0.14)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl"
+          style="will-change: transform, opacity;"
         >
-          <!-- Top dynamic autoplay progress line -->
+          <!-- Top progress line on active card -->
           <div
-            v-if="isAutoPlaying"
-            class="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-[#7170ff] via-[#06b6d4] to-[#10b981] transition-all duration-75 pointer-events-none"
-            :style="{ width: `${progressPercent}%` }"
+            v-if="activeIndex === 0"
+            ref="progressBarRef"
+            class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#7170ff] to-[#06b6d4] origin-left"
           />
 
-          <!-- Specular corner highlight -->
-          <div class="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-white/5 via-transparent to-transparent pointer-events-none" />
-
-          <!-- Card Header Row -->
-          <div class="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.07)]">
+          <!-- Header -->
+          <div class="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
             <div class="flex items-center gap-2.5">
-              <div
-                class="p-2 rounded-xl border"
-                :style="{
-                  backgroundColor: `${features[activeIndex].accentColor}18`,
-                  borderColor: `${features[activeIndex].accentColor}40`,
-                  color: features[activeIndex].accentColor,
-                }"
-              >
-                <component :is="features[activeIndex].icon" class="w-4 h-4" />
+              <div class="p-2 rounded-xl bg-[#7170ff]/15 border border-[#7170ff]/30 text-[#7170ff]">
+                <Layers class="w-4 h-4" />
               </div>
-
               <div>
-                <span
-                  class="text-[10px] font-mono tracking-widest font-semibold block uppercase"
-                  :style="{ color: features[activeIndex].accentColor }"
-                >
-                  {{ features[activeIndex].tag }}
+                <span class="text-[10px] font-mono tracking-widest font-semibold block text-[#7170ff] uppercase">
+                  {{ features[0].tag }}
                 </span>
-                <h3 class="text-base sm:text-lg font-bold text-[#f7f8f8] tracking-tight">
-                  {{ features[activeIndex].title }}
+                <h3 class="text-base font-semibold text-[#f7f8f8] tracking-tight">
+                  {{ features[0].title }}
                 </h3>
               </div>
             </div>
-
-            <!-- Card Badge -->
-            <div class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.08)] text-zinc-300">
-              {{ features[activeIndex].badge }}
-            </div>
+            <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-zinc-300">
+              {{ features[0].badge }}
+            </span>
           </div>
 
-          <!-- Card Live Interactive Feature Simulation Showcase -->
+          <!-- Body -->
           <div class="py-3 flex-1 flex flex-col justify-center space-y-3">
             <div class="space-y-1">
               <h4 class="text-xs sm:text-sm font-semibold text-zinc-200">
-                {{ features[activeIndex].tagline }}
+                {{ features[0].tagline }}
               </h4>
               <p class="text-xs text-[#8a8f98] leading-relaxed">
-                {{ features[activeIndex].summary }}
+                {{ features[0].summary }}
               </p>
             </div>
 
-            <!-- DYNAMIC INTERACTIVE COMPONENT PREVIEW FOR EACH PILLAR -->
-            <!-- 1. Spatio-Temporal Ingestion Live Ticker -->
-            <div
-              v-if="activeIndex === 0"
-              class="p-3 rounded-xl bg-[#06070a] border border-[rgba(255,255,255,0.06)] grid grid-cols-3 gap-2 text-center font-mono text-[11px]"
-            >
-              <div class="p-2 rounded bg-zinc-900/50 space-y-0.5">
-                <div class="text-[#8a8f98] text-[10px]">Amazon (US)</div>
+            <!-- Simulation: Multi-platform Ticker -->
+            <div class="p-3 rounded-xl bg-[#060709] border border-[rgba(255,255,255,0.06)] grid grid-cols-3 gap-2 text-center font-mono text-[11px]">
+              <div class="p-2 rounded bg-zinc-900/60 space-y-0.5">
+                <div class="text-[#8a8f98] text-[10px]">Amazon US</div>
                 <div class="text-[#f7f8f8] font-bold">$189.99</div>
                 <div class="text-emerald-400 text-[9px] flex items-center justify-center gap-0.5">
                   <TrendingUp class="w-2.5 h-2.5" /> BSR #142
                 </div>
               </div>
-
-              <div class="p-2 rounded bg-zinc-900/50 space-y-0.5 border border-cyan-500/20">
+              <div class="p-2 rounded bg-zinc-900/60 space-y-0.5 border border-[#7170ff]/25">
                 <div class="text-[#8a8f98] text-[10px]">TikTok Shop</div>
-                <div class="text-cyan-400 font-bold">$159.00</div>
-                <div class="text-cyan-300 text-[9px] flex items-center justify-center gap-0.5">
+                <div class="text-[#7170ff] font-bold">$159.00</div>
+                <div class="text-[#7170ff] text-[9px] flex items-center justify-center gap-0.5">
                   <TrendingUp class="w-2.5 h-2.5" /> 流量 +340%
                 </div>
               </div>
-
-              <div class="p-2 rounded bg-zinc-900/50 space-y-0.5">
+              <div class="p-2 rounded bg-zinc-900/60 space-y-0.5">
                 <div class="text-[#8a8f98] text-[10px]">Temu Global</div>
                 <div class="text-[#f7f8f8] font-bold">$139.50</div>
                 <div class="text-rose-400 text-[9px] flex items-center justify-center gap-0.5">
@@ -431,26 +450,71 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- 2. Claude Vision Forensics Bounding Box Simulation -->
-            <div
-              v-else-if="activeIndex === 1"
-              class="relative rounded-xl overflow-hidden bg-[#050608] border border-[rgba(255,255,255,0.06)] p-2.5 flex items-center justify-between"
-            >
+          <!-- Footer -->
+          <div class="pt-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between text-xs font-mono">
+            <span class="text-zinc-500 text-[11px]">按 [← / →] 切换 · 悬停暂停</span>
+            <button @click="goToNext" class="text-[#7170ff] hover:text-[#828fff] flex items-center gap-1 font-medium transition-colors">
+              <span>下一张能力</span>
+              <ChevronRight class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 1: VLM Defect Forensics -->
+        <div
+          class="deck-card-item absolute inset-0 rounded-2xl bg-[#0d0e12]/95 border border-[rgba(255,255,255,0.14)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl"
+          style="will-change: transform, opacity;"
+        >
+          <div
+            v-if="activeIndex === 1"
+            ref="progressBarRef"
+            class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#06b6d4] to-[#10b981] origin-left"
+          />
+
+          <div class="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-xl bg-[#06b6d4]/15 border border-[#06b6d4]/30 text-[#06b6d4]">
+                <Sparkles class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="text-[10px] font-mono tracking-widest font-semibold block text-[#06b6d4] uppercase">
+                  {{ features[1].tag }}
+                </span>
+                <h3 class="text-base font-semibold text-[#f7f8f8] tracking-tight">
+                  {{ features[1].title }}
+                </h3>
+              </div>
+            </div>
+            <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-zinc-300">
+              {{ features[1].badge }}
+            </span>
+          </div>
+
+          <div class="py-3 flex-1 flex flex-col justify-center space-y-3">
+            <div class="space-y-1">
+              <h4 class="text-xs sm:text-sm font-semibold text-zinc-200">
+                {{ features[1].tagline }}
+              </h4>
+              <p class="text-xs text-[#8a8f98] leading-relaxed">
+                {{ features[1].summary }}
+              </p>
+            </div>
+
+            <!-- Simulation: VLM Scan Line -->
+            <div class="relative rounded-xl overflow-hidden bg-[#050608] border border-[rgba(255,255,255,0.06)] p-3 flex items-center justify-between">
               <div class="flex items-center gap-3">
-                <div class="relative w-14 h-12 rounded-lg bg-zinc-900 overflow-hidden border border-rose-500/60 shrink-0">
-                  <div class="absolute inset-0 bg-rose-500/20" />
-                  <div class="absolute top-1 left-1 text-[8px] font-mono text-rose-300 bg-rose-950 px-1 rounded">
-                    CRACK
-                  </div>
-                  <Scan class="w-6 h-6 text-rose-400 absolute bottom-1 right-1 opacity-70" />
+                <div class="relative w-14 h-12 rounded-lg bg-zinc-900 overflow-hidden border border-rose-500/60 shrink-0 flex items-center justify-center">
+                  <div class="absolute inset-0 bg-rose-500/15" />
+                  <Scan class="w-6 h-6 text-rose-400 opacity-80" />
                 </div>
                 <div class="space-y-0.5">
                   <div class="text-xs font-mono text-rose-400 font-semibold">
-                    3D 扶手升降支架齿条应力撕裂
+                    3D 扶手升降卡扣应力剪切断裂
                   </div>
                   <div class="text-[11px] text-zinc-400 font-mono">
-                    成因：倒角 R 角仅 0.4mm，侧向 35kg 载荷产生剪切脆断
+                    物理根因：倒角 R 角仅 0.4mm，侧向 35kg 载荷产生疲劳脆断
                   </div>
                 </div>
               </div>
@@ -458,37 +522,130 @@ onBeforeUnmount(() => {
                 Claude 3.5 VLM<br />置信度 98.2%
               </div>
             </div>
+          </div>
 
-            <!-- 3. Dual-Column Blueprint Comparison -->
-            <div
-              v-else-if="activeIndex === 2"
-              class="grid grid-cols-2 gap-2 text-xs font-mono"
-            >
+          <div class="pt-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between text-xs font-mono">
+            <span class="text-zinc-500 text-[11px]">按 [← / →] 切换 · 悬停暂停</span>
+            <button @click="goToNext" class="text-[#06b6d4] hover:text-[#38bdf8] flex items-center gap-1 font-medium transition-colors">
+              <span>下一张能力</span>
+              <ChevronRight class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 2: Dual-Column Redesign -->
+        <div
+          class="deck-card-item absolute inset-0 rounded-2xl bg-[#0d0e12]/95 border border-[rgba(255,255,255,0.14)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl"
+          style="will-change: transform, opacity;"
+        >
+          <div
+            v-if="activeIndex === 2"
+            ref="progressBarRef"
+            class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#10b981] to-[#f43f5e] origin-left"
+          />
+
+          <div class="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-xl bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981]">
+                <Wrench class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="text-[10px] font-mono tracking-widest font-semibold block text-[#10b981] uppercase">
+                  {{ features[2].tag }}
+                </span>
+                <h3 class="text-base font-semibold text-[#f7f8f8] tracking-tight">
+                  {{ features[2].title }}
+                </h3>
+              </div>
+            </div>
+            <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-zinc-300">
+              {{ features[2].badge }}
+            </span>
+          </div>
+
+          <div class="py-3 flex-1 flex flex-col justify-center space-y-3">
+            <div class="space-y-1">
+              <h4 class="text-xs sm:text-sm font-semibold text-zinc-200">
+                {{ features[2].tagline }}
+              </h4>
+              <p class="text-xs text-[#8a8f98] leading-relaxed">
+                {{ features[2].summary }}
+              </p>
+            </div>
+
+            <!-- Simulation: Dual Column Blueprint -->
+            <div class="grid grid-cols-2 gap-2.5 text-xs font-mono">
               <div class="p-2.5 rounded-xl bg-cyan-950/20 border border-cyan-800/40 space-y-1">
                 <div class="text-cyan-400 font-bold text-[10px]">左栏 · 硬件本体工程</div>
-                <div class="text-zinc-200 text-[11px] truncate">Zamak-3 锌合金压铸骨架</div>
+                <div class="text-zinc-200 text-[11px] truncate">Zamak-3 压铸骨架 (±0.03mm)</div>
                 <div class="text-[#8a8f98] text-[10px]">增额: +$1.45 | 工期: 14天</div>
               </div>
-
               <div class="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-800/40 space-y-1">
                 <div class="text-emerald-400 font-bold text-[10px]">右栏 · 包装 Tier Down</div>
                 <div class="text-zinc-200 text-[11px] truncate">外箱长边紧凑压降 6.5cm</div>
                 <div class="text-emerald-400 text-[10px] font-bold">单件净省: $4.60 USD</div>
               </div>
             </div>
+          </div>
 
-            <!-- 4. Reverse Financial Veto Gate -->
-            <div
-              v-else
-              class="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-800/40 flex items-center justify-between font-mono text-xs"
-            >
+          <div class="pt-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between text-xs font-mono">
+            <span class="text-zinc-500 text-[11px]">按 [← / →] 切换 · 悬停暂停</span>
+            <button @click="goToNext" class="text-[#10b981] hover:text-[#34d399] flex items-center gap-1 font-medium transition-colors">
+              <span>下一张能力</span>
+              <ChevronRight class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 3: Financial Veto -->
+        <div
+          class="deck-card-item absolute inset-0 rounded-2xl bg-[#0d0e12]/95 border border-[rgba(255,255,255,0.14)] p-6 sm:p-7 flex flex-col justify-between overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-xl"
+          style="will-change: transform, opacity;"
+        >
+          <div
+            v-if="activeIndex === 3"
+            ref="progressBarRef"
+            class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#f43f5e] to-[#7170ff] origin-left"
+          />
+
+          <div class="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.06)]">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-xl bg-[#f43f5e]/15 border border-[#f43f5e]/30 text-[#f43f5e]">
+                <ShieldCheck class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="text-[10px] font-mono tracking-widest font-semibold block text-[#f43f5e] uppercase">
+                  {{ features[3].tag }}
+                </span>
+                <h3 class="text-base font-semibold text-[#f7f8f8] tracking-tight">
+                  {{ features[3].title }}
+                </h3>
+              </div>
+            </div>
+            <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] text-zinc-300">
+              {{ features[3].badge }}
+            </span>
+          </div>
+
+          <div class="py-3 flex-1 flex flex-col justify-center space-y-3">
+            <div class="space-y-1">
+              <h4 class="text-xs sm:text-sm font-semibold text-zinc-200">
+                {{ features[3].tagline }}
+              </h4>
+              <p class="text-xs text-[#8a8f98] leading-relaxed">
+                {{ features[3].summary }}
+              </p>
+            </div>
+
+            <!-- Simulation: Financial Decision Gate -->
+            <div class="p-3 rounded-xl bg-emerald-950/20 border border-emerald-800/40 flex items-center justify-between font-mono text-xs">
               <div class="space-y-0.5">
-                <div class="text-emerald-400 font-bold flex items-center gap-1">
-                  <CheckCircle2 class="w-3.5 h-3.5" />
+                <div class="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <CheckCircle2 class="w-4 h-4" />
                   <span>DECISION: APPROVED (准予开模)</span>
                 </div>
                 <div class="text-zinc-400 text-[10px]">
-                  测算回本: 3.8 个月 &lt; 6.0 个月生命周期 | 年化降本 $46,000
+                  测算回本: 3.8 个月 &lt; 6.0 个月阈值 | 年降本 $46,000
                 </div>
               </div>
               <div class="text-right text-[10px] text-zinc-500">
@@ -497,27 +654,20 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Card Footer Action Row -->
           <div class="pt-3 border-t border-[rgba(255,255,255,0.06)] flex items-center justify-between text-xs font-mono">
-            <span class="text-zinc-500 text-[11px]">
-              按键盘 [← / →] 翻牌，按 [Enter] 进入
-            </span>
-
-            <button
-              @click="handleNext"
-              class="text-[#7170ff] hover:text-[#828fff] flex items-center gap-1 font-medium transition-colors"
-            >
-              <span>下一张核心能力</span>
+            <span class="text-zinc-500 text-[11px]">按 [← / →] 切换 · 悬停暂停</span>
+            <button @click="goToNext" class="text-[#f43f5e] hover:text-[#fb7185] flex items-center gap-1 font-medium transition-colors">
+              <span>下一张能力</span>
               <ChevronRight class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Deck Progress Scrubber & Controls -->
-      <div class="deck-controls flex items-center justify-center gap-3 mt-6 w-full max-w-xl">
+      <!-- Cinematic Stepper Controls with Dynamic Fill Indicator -->
+      <div class="cinematic-controls flex items-center justify-center gap-3 mt-7 w-full max-w-xl">
         <button
-          @click="handlePrev"
+          @click="goToPrev"
           class="p-2 rounded-full ln-btn text-[#8a8f98] hover:text-[#f7f8f8]"
           title="上一张 (←)"
         >
@@ -527,37 +677,31 @@ onBeforeUnmount(() => {
         <button
           @click="toggleAutoPlay"
           class="p-2 rounded-full ln-btn text-[#8a8f98] hover:text-[#f7f8f8]"
-          :title="isAutoPlaying ? '暂停自动播放' : '恢复自动播放'"
+          :title="isAutoPlaying ? '暂停轮播' : '恢复轮播'"
         >
           <Pause v-if="isAutoPlaying" class="w-4 h-4 text-[#7170ff]" />
           <Play v-else class="w-4 h-4" />
         </button>
 
-        <!-- 4 Steps Interactive Tabs with Live Progress Underline -->
+        <!-- 4 Step Interactive Pills -->
         <div class="flex items-center gap-1.5 bg-[rgba(255,255,255,0.03)] p-1 rounded-xl border border-[rgba(255,255,255,0.06)] flex-1 justify-between">
           <button
             v-for="(f, i) in features"
             :key="f.id"
-            @click="goTo(i)"
+            @click="goToIndex(i)"
             :class="[
-              'relative flex-1 py-1.5 px-2 rounded-lg text-[11px] font-mono transition-all text-center truncate overflow-hidden',
+              'flex-1 py-1.5 px-2 rounded-lg text-[11px] font-mono transition-all text-center truncate',
               activeIndex === i
                 ? 'bg-[rgba(255,255,255,0.1)] text-[#f7f8f8] font-semibold shadow-sm'
                 : 'text-[#8a8f98] hover:text-zinc-300'
             ]"
           >
-            <span>0{{ i + 1 }} {{ f.title.slice(0, 4) }}</span>
-            <!-- Filling progress bar for active card -->
-            <span
-              v-if="activeIndex === i && isAutoPlaying"
-              class="absolute bottom-0 left-0 h-0.5 bg-[#7170ff] transition-all"
-              :style="{ width: `${progressPercent}%` }"
-            />
+            0{{ i + 1 }} {{ f.title.slice(0, 4) }}
           </button>
         </div>
 
         <button
-          @click="handleNext"
+          @click="goToNext"
           class="p-2 rounded-full ln-btn text-[#8a8f98] hover:text-[#f7f8f8]"
           title="下一张 (→)"
         >
@@ -569,7 +713,7 @@ onBeforeUnmount(() => {
     <!-- Bottom Footer Bar -->
     <footer class="relative z-20 max-w-6xl mx-auto w-full px-6 py-4 border-t border-[rgba(255,255,255,0.05)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-[#5e626e]">
       <div>
-        <span>出海工贸一体企业 · 产业带白牌制造 · 品牌型跨境卖家专属</span>
+        <span>工贸一体出海 · 产业带白牌制造 · 品牌型跨境卖家专属</span>
       </div>
 
       <div class="flex items-center gap-4">
