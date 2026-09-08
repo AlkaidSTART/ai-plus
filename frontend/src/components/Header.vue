@@ -2,6 +2,7 @@
 import {
   ChevronDown,
 } from 'lucide-vue-next';
+import productLogo from '../assets/Product_logo.webp';
 import type { Marketplace } from '../types';
 
 defineProps<{
@@ -41,7 +42,7 @@ const popularAsins = [
         <!-- Brand & Product Breadcrumb -->
         <div class="flex items-center gap-3 shrink-0">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold tracking-tight text-[#f7f8f8]">InsightX</span>
+            <img :src="productLogo" alt="InsightX" class="h-7 w-auto object-contain" />
             <span class="text-zinc-600 font-mono">/</span>
             <div class="relative flex items-center">
               <select

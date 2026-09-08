@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "lucide-vue-next": "^0.475.0",
-    "vue": "^3.5.41"
+    "vue": "^3.5.41",
+    "vue-i18n": "^11.1.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
