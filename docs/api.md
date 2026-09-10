@@ -1,645 +1,322 @@
-# InsightX API 接口文档
+# InsightX REST / SSE API 契约
 
-| 文档版本 | V1.0 | 编制日期 | 2026-09-05 |
-| :--- | :--- | :--- | :--- |
-| Base URL | `http://localhost:8000/api/v1` | 通信协议 | REST (JSON) + SSE |
-| 上游依据 | [PRD](PRD.md) · [04-技术方案](04-技术方案.md) | 适用阶段 | MVP（P0）→ 复赛（P1/P2） |
+> V0.1 设计草案 · 2026-09-10。依据 [PRD V1.1](PRD.md) 与 [系统技术方案](04-技术方案.md)。  
+> 当前仓库没有 backend，以下接口均为待实现设计。只有创建任务的路径来自 PRD，其他路径和字段是本轮建议。P0 契约细化到联调边界，P1/P2 接口在对应阶段补充。
 
-本文档是前后端并行开发的接口契约。所有端点以 PRD 功能编号（P0-01 ~ P2-03）为优先级依据；后端实现后由 FastAPI `/docs` 自动生成的 OpenAPI 文档为准，本文档负责约定路径、入参出参与时序语义。
+## 1. 通用约定
 
----
+- API 前缀 `/api/v1`；REST 使用 JSON，字段 snake_case；ID 为服务端生成的不透明字符串，示例 ID 仅说明关系。
+- 时间戳使用 ISO 8601 UTC；日期使用 `YYYY-MM-DD`。查询日期窗为闭区间日历日期，服务端按站点时区转换成 UTC 半开区间，快照保存解析结果。日期仅有日粒度的来源保留原精度，不制造时分秒。
+- 金额采用 Decimal 计算，JSON 用十进制定点字符串并带币种；比例为 0–1 数值，计数为非负整数。未知值为 `null`，不可用指标另附 reason，不使用 0、999 代替未知。
+- P0 平台固定 `amazon`、站点固定 `US`；ASIN 规范化为大写，满足 `^[A-Z0-9]{10}$`。存在性、变体与品类在采集验证。
+- 企业身份从已验证的服务端会话获得，不接受正文中的 tenant_id 作为授权。所有资源 ID 均校验所属企业；越权资源按 404 处理。
+- 建议采用同源 HttpOnly 会话 Cookie。改变状态的请求验证 CSRF token 与 Origin；SSE 不用 URL 携带长期令牌。身份接入的登录/成员 API 另行按确定的身份方案细化，当前 mock 登录不是此会话。
+- 列表采用不透明 cursor，limit 默认 20、最大 100（设计默认）；返回 `items`、`next_cursor`，末页为 null。同一查询中排序稳定，游标不得用于不同过滤条件。
+- GET 200、创建异步任务 202、格式/字段错误 422、未登录 401、资源不存在 404、幂等冲突 409、限流 429。429 可携带 Retry-After。
 
-## 一、通用约定
-
-### 1.1 鉴权
-- 采用 JWT Bearer：`Authorization: Bearer <token>`。
-- **MVP 阶段（比赛 Demo）可先关闭鉴权**，后端预留中间件位，单租户演示模式直接放行；P1 阶段接入登录后启用。
-
-### 1.2 统一响应结构
-所有 REST 接口返回统一信封：
+错误格式：
 
 ```json
-{ "code": 0, "message": "ok", "data": { } }
-```
-
-- `code = 0` 表示成功，非 0 见[错误码表](#六错误码表)。
-- 时间字段统一 ISO 8601 UTC（`2026-09-05T08:00:00Z`）；金额单位 USD，保留 2 位小数；比率字段用 0~1 小数。
-- 分页参数：`page`（从 1 起）、`page_size`（默认 20，最大 100）；分页响应 `data` 为 `{ "items": [...], "total": 128, "page": 1, "page_size": 20 }`。
-
-### 1.3 开发环境代理
-- 前端开发环境由 Vite 将 `/api` 代理至 `http://localhost:8000`；生产环境通过 `VITE_API_BASE_URL` 指定后端地址。
-- SSE 长连接不经 Vite 代理缓冲（`EventSource` 直连或代理需关闭 buffer），后端通过 `CORSMiddleware` 放行前端来源。
-
-### 1.4 幂等与缓存
-- 同一 ASIN 在缓存期内（建议 24h）重复创建分析任务时，复用已抓取的评论数据切片，仅重算后续 Agent 节点（对应 PRD NFR 数据幂等性）。
-
----
-
-## 二、接口总览
-
-| 模块 | 方法 | 路径 | 优先级 | 说明 | PRD 功能 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 系统 | GET | `/health` | P0 | 健康检查 | — |
-| 认证 | POST | `/auth/login` | P1 | 登录换取 JWT | — |
-| 认证 | GET | `/auth/me` | P1 | 当前用户信息 | — |
-| **洞察任务** | POST | `/insight/tasks` | **P0** | 创建诊断任务（1-10 个 ASIN，批量则生成多个任务） | P0-01 |
-| 洞察任务 | GET | `/insight/tasks` | P0 | 任务列表（分页） | P0-04 |
-| 洞察任务 | GET | `/insight/tasks/{task_id}` | P0 | 任务详情（状态、节点、进度） | P0-04 |
-| 洞察任务 | GET | `/insight/tasks/{task_id}/events` | **P0** | SSE 实时事件流 | P0-04 |
-| 洞察任务 | POST | `/insight/tasks/{task_id}/cancel` | P1 | 取消任务 | — |
-| 洞察任务 | POST | `/insight/tasks/{task_id}/retry` | P1 | 重试失败任务 | — |
-| 洞察任务 | GET | `/insight/tasks/{task_id}/report` | P0 | 聚合最终报告（聚类+双栏+财务+回测） | P0-03 |
-| **大盘** | GET | `/dashboard/overview` | P0 | KPI 卡片聚合数据 | P0-04 |
-| 大盘 | GET | `/dashboard/recommendations` | P1 | Top 3 高潜改款项目推荐 | P0-04 |
-| **竞品** | GET | `/products` | P0 | 竞品列表 | P0-01 |
-| 竞品 | GET | `/products/{product_id}` | P0 | 竞品详情（元数据） | P0-01 |
-| 竞品 | GET | `/products/{product_id}/price-history` | P1 | 价格 / BSR / Buy Box 时序 | — |
-| **VOC** | GET | `/products/{product_id}/reviews` | P0 | 评论列表（星级/语言/时间筛选） | P0-02 |
-| VOC | GET | `/insight/tasks/{task_id}/clusters` | **P0** | 痛点聚类结果（Top N） | P0-02 |
-| **取证** | GET | `/insight/tasks/{task_id}/visual-evidences` | P1 | VLM 实拍图缺陷取证画廊 | P1-01 |
-| **改款决策** | GET | `/insight/tasks/{task_id}/proposals` | **P0** | 双栏改款清单 | P0-03 |
-| 改款决策 | GET | `/proposals/{proposal_id}` | P0 | 单条提案详情 | P0-03 |
-| 改款决策 | GET | `/proposals/{proposal_id}/evidence` | P1 | 证据链穿透（原始评论+实拍图） | P1-03 |
-| 改款决策 | POST | `/insight/tasks/{task_id}/export` | P2 | 导出工程改款 RFC（PDF/Excel） | — |
-| **财务风控** | POST | `/financial/simulate` | P1 | ROI / 回本周期 / FBA 降档模拟（无副作用） | P1-02 |
-| 财务风控 | GET | `/insight/tasks/{task_id}/financial` | P1 | 任务财务否决决议结果 | P1-02 |
-| **回测** | POST | `/backtest/run` | P2 | 发起历史时间切片回测 | P2-01 |
-| 回测 | GET | `/backtest/{backtest_id}` | P2 | 回测结果与吻合度评分 | P2-01 |
-| **跨平台** | GET | `/cross-platform/mapping` | P2 | 跨平台同款 SKU 映射与价差 | P2-02 |
-| **告警** | GET | `/alerts` | P1 | 告警中心（价格异动/供应链/熔断） | P2-03 |
-| 告警 | PATCH | `/alerts/{alert_id}` | P1 | 标记告警已读 | — |
-
-> 注：PRD 时序图中的 `POST /api/v1/insight/task` 在本文档统一为 RESTful 复数形式 `/insight/tasks`，后端路由实现以本文档为准。
-
----
-
-## 三、系统与认证
-
-### 3.1 健康检查 `GET /health`
-无鉴权。返回 `data: { "status": "ok", "version": "0.1.0", "db": true, "redis": true }`，用于部署验证与前端连接探测。
-
-### 3.2 登录 `POST /auth/login`
-```json
-// 请求
-{ "username": "demo@insightx.ai", "password": "******" }
-// data
-{ "access_token": "eyJhbGciOi...", "token_type": "bearer", "expires_in": 86400 }
-```
-
-### 3.3 当前用户 `GET /auth/me`
-返回 `data: { "user_id": "usr_01", "username": "demo@insightx.ai", "tenant_id": "tnt_01", "role": "owner" }`。
-
----
-
-## 四、洞察任务模块（核心）
-
-### 4.1 创建诊断任务 `POST /insight/tasks`（P0-01）
-
-单次提交 1-10 个 ASIN；因 LangGraph `InsightState` 以单 ASIN 为驱动，批量提交时**后端为每个 ASIN 各创建一个任务**并一并返回。若传 `amazon_url` 则自动解析其中的 ASIN，与 `asins` 至少提供一项。
-
-```json
-// 请求
 {
-  "asins": ["B0C1234ABC"],
-  "amazon_url": null,
-  "platform": "amazon",
-  "marketplace": "US",
-  "review_window_months": 6,
-  "max_reviews": 500,
-  "financial_constraint": {
-    "mold_cost_usd": 8000,
-    "moq": 1000,
-    "current_gross_margin": 0.32,
-    "expected_price_usd": 29.99,
-    "unit_cost_increase_usd": 1.8,
-    "expected_payback_months": 6,
-    "sea_freight_usd_per_cbm": 180
-  },
-  "options": {
-    "enable_vision_audit": true,
-    "enable_backtest": false
+  "error": {
+    "code": "INVALID_ASIN",
+    "message": "ASIN 必须为 10 位字母或数字",
+    "details": [{"field": "asins[0]", "reason": "invalid_format"}],
+    "retryable": false,
+    "request_id": "req_example"
   }
 }
 ```
 
-```json
-// data
-{
-  "tasks": [
-    {
-      "task_id": "tsk_9f2c81a4",
-      "asin": "B0C1234ABC",
-      "product_id": "0d1f3a5e-...",
-      "status": "PENDING",
-      "cache_hit": false,
-      "estimated_seconds": 45,
-      "created_at": "2026-09-05T08:00:00Z"
-    }
-  ]
-}
-```
+`code` 供前端逻辑判断，message 可本地化；不返回异常堆栈、密钥或第三方原始鉴权错误。任务执行中的错误通过分项与事件返回，不改变已经发出的创建响应。
 
-校验规则（对应 P0-01 验收标准）：
-- ASIN 必须为标准 10 位（`^[A-Z0-9]{10}$`），不合法返回 `42201`；
-- 数量超出 1-10 返回 `40001`；抓取成功率与无意义短评（"ok"、"fast"）过滤由后端采集管道保证，接口层只做参数校验。
+## 2. 状态及公共对象
 
-### 4.2 任务列表 `GET /insight/tasks`
-Query：`status`（PENDING/RUNNING/COMPLETED/FAILED/CANCELED）、`asin`、`page`、`page_size`。`items` 元素结构与 [4.5 任务详情](#45-任务详情-get-insighttaskstask_id) 相同（`summary` 仅保留概要字段）。
+| 字段 | 枚举 / 语义 |
+| --- | --- |
+| task.status / item.status | QUEUED、RUNNING、COMPLETED、FAILED、CANCELED |
+| node.status | PENDING、RUNNING、COMPLETED、FAILED、CANCELED、SKIPPED |
+| veto_status | NOT_EVALUATED、PASSED、VETOED；P0 恒为 NOT_EVALUATED |
+| report.availability | SUFFICIENT、LIMITED、INSUFFICIENT；不代表市场样本有统计代表性 |
+| proposal.column | PRODUCT、PACKAGING |
+| phase | P0；P1/P2 暂不接受 |
+| report_id | 该分项有已发布结果时为字符串，否则 null |
 
-### 4.3 任务事件流 `GET /insight/tasks/{task_id}/events`（SSE，P0-04）
+`COMPLETED + VETOED` 在 P1 合法：任务成功算出财务否决。批量部分失败采用 COMPLETED 与分项计数/warnings 表示，不新增 PARTIAL 状态；全失败或被取消的规则见技术方案 §5.3。报告不足可以是正常执行结果，采集错误不能标为“无评论”。
 
-- 响应头：`Content-Type: text/event-stream`，`Cache-Control: no-cache`，`X-Accel-Buffering: no`。
-- 每条事件 `event: message`，`data` 为 JSON：
+公共 warnings 对象：`code`、`message`、`item_id`（任务级可为 null）。公共分项 error 使用通用错误中的 code/message/retryable，不暴露内部堆栈。
 
-```json
-{
-  "task_id": "tsk_9f2c81a4",
-  "step": "VISION_AUDIT",
-  "progress": 45,
-  "message": "Claude Vision 完成 18 张买家实拍图质检",
-  "extra": { "reviews_fetched": 320, "images_audited": 18 },
-  "timestamp": "2026-09-05T08:00:23Z"
-}
-```
+## 3. P0 端点清单
 
-**`step` 枚举**（与 LangGraph 节点一一对应，供前端播放 7 步节点推进动画）：
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| POST | `/insight/task` | 创建 1–10 ASIN 的诊断任务 |
+| GET | `/insight/tasks` | 当前企业的任务列表 |
+| GET | `/insight/task/{task_id}` | 任务与全部分项的当前快照 |
+| GET | `/insight/task/{task_id}/events` | SSE 状态事件与恢复 |
+| POST | `/insight/task/{task_id}/cancel` | 请求取消尚未完成的分项 |
+| POST | `/insight/task/{task_id}/retry` | 从失败分项创建新任务 |
+| GET | `/insight/task/{task_id}/items/{item_id}/report` | 该分项当前已发布报告 |
+| GET | `/insight/task/{task_id}/items/{item_id}/evidence` | 按报告、痛点/建议读取真实关联证据 |
 
-| step | 含义 | 约定进度区间 |
-| :--- | :--- | :--- |
-| `QUEUED` | 任务已入队等待调度 | 0-5 |
-| `FETCHING_DATA` | 数据采集与清洗（Playwright/HTTPX 抓取评论与买家图） | 5-25 |
-| `VISION_AUDIT` | Claude Vision 实拍图取证 | 25-45 |
-| `SEMANTIC_CLUSTER` | bge-m3 向量化与痛点聚类 | 45-65 |
-| `DUAL_DECISION` | 双栏改款建议生成 | 65-85 |
-| `FINANCIAL_VETO` | 财务否决审核（被 VETO 打回重试时再次推送本 step，`extra.retry_count` 递增） | 85-92 |
-| `EVIDENCE_TRACE` | 证据链反向索引校验 | 92-96 |
-| `BACKTEST_EVAL` | 历史回测（`enable_backtest=false` 时跳过） | 96-99 |
-| `COMPLETED` | 终态：任务完成，前端应关闭连接并拉取 `report` | 100 |
-| `FAILED` | 终态：任务失败，`message` 携带失败原因 | — |
+表中路径均相对 `/api/v1`。P0 不新增一个返回 mock KPI 的 overview 接口，初期从任务列表与选中报告组织页面；真实企业级聚合有需要时再扩展。
 
-补充约定：
-- 心跳：服务端每 15s 下发一行 SSE 注释 `: ping`，防止代理断连。
-- 前端在收到 `COMPLETED` / `FAILED` 后 `EventSource.close()`；断线可依赖 EventSource 自动重连，服务端支持从 Redis 补发最近状态。
-- `progress` 为 0-100 整数，仅供展示，后端不保证严格单调。
+## 4. 创建与查询任务
 
-### 4.4 取消 / 重试
-- `POST /insight/tasks/{task_id}/cancel`：仅 `PENDING/RUNNING` 可取消，否则 `40901`。
-- `POST /insight/tasks/{task_id}/retry`：仅 `FAILED` 可重试；复用 `task_id` 或生成新任务由后端实现定夺，响应返回最新任务详情。
+### 4.1 POST /insight/task
 
-### 4.5 任务详情 `GET /insight/tasks/{task_id}`
+请求头要求 `Idempotency-Key`，由客户端为一次提交生成并在网络重试时复用。服务端保存规范化请求的哈希；相同企业、相同键与内容返回原任务（仍为 202，reused=true），同键不同内容返回 409 `IDEMPOTENCY_CONFLICT`。该保证在任务记录存续期内有效，记录删除策略确定后再明确更长期保证。
 
 ```json
-// data
 {
-  "task_id": "tsk_9f2c81a4",
-  "asin": "B0C1234ABC",
-  "product_id": "0d1f3a5e-...",
+  "project_id": "project_home",
+  "asins": ["B012345678", "B087654321"],
   "platform": "amazon",
   "marketplace": "US",
+  "window": {"start_date": "2026-03-10", "end_date": "2026-09-10"}
+}
+```
+
+示例 ASIN 只用于格式说明，未验证商品存在。project_id 必须属于当前企业且匹配该品类/站点；P0 可由服务端预置一个项目并由前端固定使用，后续身份/项目启动配置需提供该 ID。
+
+必需字段为 project_id、asins；platform/marketplace 缺省使用 amazon/US，其他值返回 422。window 缺省为站点当前日向前六个日历月（短月日期夹至月末）；返回完整解析日期。拒绝反向日期窗和未来结束日期，来源不支持的合法历史窗在覆盖报告中说明。
+
+ASIN 去重后必须有 1–10 个；批次中任一格式非法则整个请求 422，不创建半份任务。异品类或商品不存在等来源验证错误属于异步分项错误。
+
+响应 202：
+
+```json
+{
+  "task_id": "task_example",
+  "status": "QUEUED",
+  "phase": "P0",
+  "reused": false,
+  "window": {"start_date": "2026-03-10", "end_date": "2026-09-10"},
+  "items": [
+    {"item_id": "item_a", "asin": "B012345678", "status": "QUEUED"},
+    {"item_id": "item_b", "asin": "B087654321", "status": "QUEUED"}
+  ],
+  "links": {
+    "self": "/api/v1/insight/task/task_example",
+    "events": "/api/v1/insight/task/task_example/events"
+  }
+}
+```
+
+### 4.2 GET /insight/tasks
+
+支持 project_id、status、cursor、limit；按 created_at 降序、id 降序稳定分页。返回 `items` 中每项含 task_id、project_id、created_at、status、asins、item_counts、warnings_count，及 next_cursor。空列表为 `items: []`。只查当前企业。
+
+### 4.3 GET /insight/task/{task_id}
+
+返回一个一致性快照：状态/分项与 last_event_id 从同一数据库读快照获取，避免“新游标搭配旧状态”。
+
+```json
+{
+  "task_id": "task_example",
+  "project_id": "project_home",
+  "phase": "P0",
   "status": "RUNNING",
-  "current_node": "semantic_cluster",
-  "progress": 65,
-  "retry_count": 0,
-  "financial_constraint": { "mold_cost_usd": 8000, "moq": 1000 },
-  "summary": {
-    "review_count": 318,
-    "cluster_count": 5,
-    "proposal_count": 6,
-    "veto_status": "PENDING",
-    "backtest_score": null
-  },
-  "error_message": null,
-  "created_at": "2026-09-05T08:00:00Z",
-  "started_at": "2026-09-05T08:00:03Z",
-  "finished_at": null
-}
-```
-
-### 4.6 聚合报告 `GET /insight/tasks/{task_id}/report`
-
-一次性返回大盘渲染所需的全部结果（前端亦可在 `COMPLETED` 后分别调 clusters / proposals / financial）。
-
-```json
-// data（结构示意，子对象完整字段见各明细接口）
-{
-  "task": { "...": "任务详情同 4.5，status=COMPLETED" },
-  "clusters": { "items": [ "..." ] },
-  "proposals": { "items": [ "..." ] },
-  "financial": { "...": "同 8.2，无则 null" },
-  "visual_evidences": { "items": [ "..." ] }
-}
-```
-
----
-
-## 五、战略决策大盘
-
-### 5.1 KPI 总览 `GET /dashboard/overview`（P0-04）
-对应大盘 Top KPI Row，可传 `days`（默认 30）限定统计窗口。
-
-```json
-// data
-{
-  "monitored_product_count": 12,
-  "running_task_count": 2,
-  "pain_point_cluster_count": 23,
-  "fba_saving_pool_usd": 42800.00,
-  "veto_triggered_count": 3,
-  "avg_rating": 4.1,
-  "negative_review_rate": 0.18
-}
-```
-
-### 5.2 高潜改款推荐 `GET /dashboard/recommendations`
-返回近期分析完成的 Top 3 推荐项目（PRD 5.1）。
-
-```json
-// data.items[]
-{
-  "task_id": "tsk_9f2c81a4",
-  "product_id": "0d1f3a5e-...",
-  "asin": "B0C1234ABC",
-  "title": "LED 台灯 Pro",
-  "main_image_url": "https://...",
-  "estimated_roi": 2.4,
-  "return_rate_reduction": 0.35,
-  "veto_status": "PASSED",
-  "finished_at": "2026-09-04T22:10:00Z"
-}
-```
-
----
-
-## 六、竞品监控
-
-### 6.1 竞品列表 `GET /products`
-Query：`platform`、`marketplace`、`keyword`（标题/ASIN 模糊）、分页。
-
-```json
-// data.items[]
-{
-  "product_id": "0d1f3a5e-...",
-  "asin": "B0C1234ABC",
-  "platform": "amazon",
-  "marketplace": "US",
-  "title": "LED Desk Lamp Pro",
-  "category": "Home & Kitchen",
-  "current_price": 29.99,
-  "currency": "USD",
-  "main_image_url": "https://...",
-  "review_count": 318,
-  "avg_rating": 4.1,
-  "bsr": 1240,
-  "updated_at": "2026-09-05T06:00:00Z"
-}
-```
-
-### 6.2 竞品详情 `GET /products/{product_id}`
-在列表字段基础上追加尺寸重量（供抛重测算）：`length_cm / width_cm / height_cm / weight_kg`、`bsr_category`、`created_at`。
-
-### 6.3 价格 / BSR / Buy Box 时序 `GET /products/{product_id}/price-history`（P1）
-Query：`start_date`、`end_date`（默认近 90 天）、`interval`（`6h`/`1d`，默认 `1d`）。
-
-```json
-// data.points[]
-{ "ts": "2026-09-01T00:00:00Z", "price": 27.99, "bsr": 1150, "buy_box_price": 27.99, "has_coupon": false }
-```
-
----
-
-## 七、评论洞察（VOC）
-
-### 7.1 评论列表 `GET /products/{product_id}/reviews`
-Query：`rating_min` / `rating_max`（差评筛选用 1-3 星）、`language`（如 `en`/`de`/`ja`）、`verified_only`、`start_date` / `end_date`、`keyword`、分页。支持多语言原声与翻译对照视图（PRD 5.2）。
-
-```json
-// data.items[]
-{
-  "review_id": "rev_88c2...",
-  "rating": 1.0,
-  "review_date": "2026-03-12",
-  "language": "de",
-  "title": "Griff nach einer Woche gebrochen",
-  "content": "Der Griff ist nach einer Woche gebrochen...",
-  "translated_content": "把手一周后就断了……",
-  "verified_purchase": true,
-  "helpful_votes": 12,
-  "image_urls": ["https://minio/.../img1.jpg"],
-  "cluster_ids": ["clu_01"]
-}
-```
-
-### 7.2 痛点聚类结果 `GET /insight/tasks/{task_id}/clusters`（P0-02）
-返回该任务聚类出的 Top N 痛点（默认 Top 5），按严重度 × 频次加权排序。
-
-```json
-// data.items[]
-{
-  "cluster_id": "clu_01",
-  "cluster_name": "把手易断裂",
-  "issue_type": "product_defect",
-  "frequency": 128,
-  "frequency_ratio": 0.34,
-  "severity_score": 4.6,
-  "severity_level": "critical",
-  "keywords": ["broke", "handle", "crack"],
-  "sample_quotes": [
+  "created_at": "2026-09-10T08:00:00Z",
+  "completed_at": null,
+  "cancel_requested_at": null,
+  "last_event_id": "12",
+  "item_counts": {"total": 2, "queued": 1, "running": 1, "completed": 0, "failed": 0, "canceled": 0},
+  "items": [
     {
-      "review_id": "rev_88c2...",
-      "language": "de",
-      "content": "Der Griff ist gebrochen...",
-      "translated_content": "把手断了……",
-      "rating": 1.0
+      "item_id": "item_a",
+      "asin": "B012345678",
+      "status": "RUNNING",
+      "attempt": 1,
+      "current_node": "clustering",
+      "nodes": [
+        {"key": "ingestion", "status": "COMPLETED", "duration_ms": 8200},
+        {"key": "normalization", "status": "COMPLETED", "duration_ms": 400},
+        {"key": "embedding", "status": "COMPLETED", "duration_ms": 3500},
+        {"key": "clustering", "status": "RUNNING", "duration_ms": null},
+        {"key": "proposal", "status": "PENDING", "duration_ms": null},
+        {"key": "evidence_validation", "status": "PENDING", "duration_ms": null},
+        {"key": "publish", "status": "PENDING", "duration_ms": null}
+      ],
+      "progress": {"completed_nodes": 3, "total_nodes": 7, "processed_reviews": 160, "total_reviews": 160},
+      "report_id": null,
+      "error": null
+    },
+    {
+      "item_id": "item_b",
+      "asin": "B087654321",
+      "status": "QUEUED",
+      "attempt": 1,
+      "current_node": null,
+      "nodes": [],
+      "progress": {"completed_nodes": 0, "total_nodes": 7, "processed_reviews": 0, "total_reviews": null},
+      "report_id": null,
+      "error": null
     }
   ],
-  "sample_image_ids": ["img_a1", "img_b2"]
+  "warnings": []
 }
 ```
 
-- `issue_type` 枚举：`product_defect`（质量）/ `function_defect`（功能）/ `size_spec`（尺寸）/ `accessory`（配件）/ `manual`（说明书）/ `packaging_delivery`（包装履约）/ `other`。
-- `severity_level` 映射（前端徽章 Critical / Moderate / Minor）：`>= 4.0` critical，`>= 2.5` moderate，其余 minor。
+数值均为合成协议示例，不是性能实测。所有分项都返回，不分页。节点可增加 started_at、completed_at、output_summary、skip_reason，缺省为 null；output_summary 只包含业务摘要，不包含模型内部推理或完整提示词。
 
----
+## 5. 报告与证据
 
-## 八、多模态取证与改款决策
+### 5.1 GET /insight/task/{task_id}/items/{item_id}/report
 
-### 8.1 VLM 实拍图取证画廊 `GET /insight/tasks/{task_id}/visual-evidences`（P1-01）
-Query：`defect_category`、`min_confidence`（默认 0.6）、分页。
+执行中尚未发布：409 `REPORT_NOT_READY`。终态且没有报告：404 `REPORT_NOT_AVAILABLE`。分项不存在或不属于 task：404。正常零样本时返回 200 与 INSUFFICIENT 报告。
+
+报告必需字段：
+
+| 字段 | 结构与含义 |
+| --- | --- |
+| report_id、report_version、item_id、published_at | 已发布报告身份；后续查询证据必须携带同一 report_id |
+| snapshot | id、source、observed_at、window、content_hash；来源不可缺省 |
+| product | asin、marketplace、title、price、currency、bsr、observed_at；未知元数据可为 null |
+| availability、limitations | 证据可用性和限制数组；不是成功率/置信度 |
+| coverage | raw_count、valid_count、excluded_count、negative_count、rating_distribution、language_distribution、month_distribution、missing_reasons、sampling_mode |
+| metrics | sample_average_rating、sample_negative_rate、issue_count、reform_potential_index、fba_savings_per_unit |
+| clusters | 痛点对象数组，最多五个展示项；other_cluster_count 与 unclassified_review_count 单独返回 |
+| proposals | `{product: [...], packaging: [...]}`；两键必须存在，任一可为空 |
+| veto_status | P0 为 NOT_EVALUATED |
+| provenance | embedding_model_revision、llm_model_id、prompt_version、pipeline_version、clustering_version |
+
+coverage 的 rating_distribution 键为 1–5 星，language_distribution 使用来源/检测语言码（未知用 und），month_distribution 按 YYYY-MM；均统计有效去重评论。raw_count 是本快照内去重前收集的原始条目数；excluded_count 包含去重与无效条目，因此 raw_count = valid_count + excluded_count。negative_count 是 valid_count 中 1–3 星数。另保存排除原因分布用于核对。
+
+每个 metric 采用 `{value, reason, basis}`；basis 包含 sample_count 和 denominator（不适用可为 null）。只有取样覆盖 1–5 星时才计算面向全样本的平均星级与低星比例，且仍标注样本口径；P0 未定义的潜力指数与 FBA 节约额返回 value=null、reason=NOT_EVALUATED。FBA 金额在 P1 再增加 currency 和情景引用，不提前返回固定数。
+
+痛点对象：
 
 ```json
-// data.items[]
 {
-  "image_id": "img_a1",
-  "review_id": "rev_88c2...",
-  "storage_url": "https://minio:9000/buyer-review-images/img_a1.jpg",
-  "defect_category": "craft_flaw",
-  "description": "把手根部应力集中处断裂，断口平整，疑为模具公差或材质强度不足",
-  "confidence": 0.92,
-  "bbox": [120, 80, 420, 360],
-  "cluster_ids": ["clu_01"]
+  "id": "cluster_a",
+  "name_zh": "扶手连接处断裂",
+  "name_en": "Armrest connection breakage",
+  "category": "quality",
+  "frequency": 12,
+  "denominator": 40,
+  "share_ratio": 0.3,
+  "severity": 4,
+  "severity_reason": "样本报告扶手承力功能失效",
+  "sample_quote": {"review_id": "review_a", "text": "The armrest snapped.", "translation": null},
+  "evidence_count": 12,
+  "photo_count": 0
 }
 ```
 
-`defect_category` 枚举：`color_difference`（色差）/ `broken_package`（运输破损）/ `craft_flaw`（工艺瑕疵/断裂）/ `dimension_issue`（尺寸问题）/ `other`。`bbox` 为 `[x0, y0, x1, y1]` 像素坐标，供前端叠加缺陷边界框。
+这是合成结构示例。category 使用 quality / function / size / accessory / instructions / packaging / other。frequency 与 evidence_count 都按真实关联的独立评论计数；severity 在 1–5，聚合规则绑定版本；share_ratio=frequency/denominator，分母为零时 null。
 
-### 8.2 双栏改款清单 `GET /insight/tasks/{task_id}/proposals`（P0-03）
-按 `track_type` 区分左栏（产品本体）与右栏（包装履约），前端以双栏卡片对照展示。
+建议对象通用字段：id、column、title、action、target_cluster_ids、expected_effect、assumptions、verification_required、evidence_count、photo_count。PRODUCT 与 PACKAGING 的数组元素使用同一个通用结构；成本、工期、尺寸及 FBA 参数在 P1 按可验证来源扩展。
 
-```json
-// data.items[]
-{
-  "proposal_id": "prp_5b7e...",
-  "task_id": "tsk_9f2c81a4",
-  "track_type": "BODY_OPTIMIZATION",
-  "title": "替换把手材质为阻燃 PC 并增加防呆卡扣",
-  "description": "针对 34% 断裂差评，将 ABS 把手替换为玻纤增强 PC，卡扣处增加 0.5mm 防呆结构，拔模斜度修正至 2°……",
-  "cost_estimation_usd": 8500,
-  "mold_opening_required": true,
-  "mold_cycle_days": 60,
-  "estimated_roi": 2.4,
-  "defect_rate_reduction": 0.62,
-  "status": "PASSED",
-  "veto_reason": null,
-  "fallback_applied": false,
-  "source_cluster_ids": ["clu_01"],
-  "evidence_review_count": 42,
-  "evidence_image_count": 8,
-  "created_at": "2026-09-05T08:01:40Z"
-}
-```
+约束：target_cluster_ids 非空，全部属于当前报告；正文只能引用所关联痛点支持的事实。expected_effect 是定性预期，不允许无依据的精确收益百分比。verification_required 是待工厂验证的事项列表；evidence_count 为关联簇评论并集去重后的数量。P0 photo_count=0 表示没有纳入图像证据，不表示来源页面没有图片。
 
-包装履约轨（`track_type = "PACKAGING_FULFILLMENT"`）额外携带以下字段，供 FBA 降档对比展示：
+### 5.2 GET .../evidence
+
+查询参数：report_id 必需；cluster_id / proposal_id 必须且只能指定一个；cursor、limit 用于分页。目标必须属于该 report，且报告属于当前 item/task/tenant。后续 P1 增加 rating、start_date、end_date、language 筛选；未实现的参数应返回 422，不能静默忽略。
 
 ```json
 {
-  "package_size_old_cm": [30, 20, 12],
-  "package_size_new_cm": [26, 18, 9],
-  "volumetric_weight_old_kg": 1.44,
-  "volumetric_weight_new_kg": 0.84,
-  "fba_tier_old": "Large Standard",
-  "fba_tier_new": "Small Standard",
-  "fulfillment_saving_usd_per_unit": 1.35
-}
-```
-
-- `status`：`PASSED` / `VETOED`（对应财务熔断决议，红色警示展示 `veto_reason`）。
-- `fallback_applied`：被否决后是否已由 Agent 生成降级替代方案（如免开模小改、仅优化包装）。
-
-### 8.3 提案详情 `GET /proposals/{proposal_id}`
-字段同 8.2 单元素。
-
-### 8.4 证据链穿透 `GET /proposals/{proposal_id}/evidence`（P1-03）
-支撑改款抽屉弹窗：点击建议后拉取原始证据，支持按星级、时间筛选（Query：`rating_max`、`start_date`、`end_date`、分页）。
-
-```json
-// data
-{
-  "proposal_id": "prp_5b7e...",
-  "total": 50,
-  "reviews": [
+  "report_id": "report_example",
+  "target": {"type": "cluster", "id": "cluster_a"},
+  "total": 1,
+  "items": [
     {
-      "review_id": "rev_88c2...",
-      "rating": 1.0,
-      "review_date": "2026-03-12",
-      "language": "de",
-      "content": "Der Griff ist nach einer Woche gebrochen...",
-      "translated_content": "把手一周后就断了……",
-      "highlight_keywords": ["gebrochen", "Griff"],
-      "images": [
-        {
-          "image_id": "img_a1",
-          "storage_url": "https://minio:9000/.../img_a1.jpg",
-          "defect_category": "craft_flaw",
-          "confidence": 0.92
-        }
-      ]
-    }
-  ]
-}
-```
-
-前端依据 `highlight_keywords` 在原文中高亮核心抱怨词（对应 P1-03 验收第 3 条）；卡片上的引用数直接使用 8.2 的 `evidence_review_count / evidence_image_count`。
-
-### 8.5 导出工程改款任务书 `POST /insight/tasks/{task_id}/export`（P2）
-```json
-// 请求
-{ "format": "pdf", "proposal_ids": ["prp_5b7e..."] }
-// data
-{ "download_url": "https://.../rfc_tsk_9f2c81a4.pdf", "expires_in": 3600 }
-```
-
----
-
-## 九、财务风控
-
-### 9.1 参数模拟 `POST /financial/simulate`（P1-02，无副作用）
-供风控页财务参数滑块拖动时**实时重算**（盈亏平衡与敏感度曲线），不落库、不触发 Agent。
-
-```json
-// 请求
-{
-  "mold_cost_usd": 8000,
-  "moq": 1000,
-  "current_gross_margin": 0.32,
-  "expected_price_usd": 29.99,
-  "unit_cost_increase_usd": 1.8,
-  "expected_payback_months": 6,
-  "sea_freight_usd_per_cbm": 180,
-  "package_size_old_cm": [30, 20, 12],
-  "package_size_new_cm": [26, 18, 9],
-  "expected_return_rate_reduction": 0.35,
-  "product_lifecycle_days": 180
-}
-```
-
-```json
-// data
-{
-  "volumetric_weight_old_kg": 1.44,
-  "volumetric_weight_new_kg": 0.84,
-  "fba_tier_old": "Large Standard",
-  "fba_tier_new": "Small Standard",
-  "fulfillment_saving_usd_per_unit": 1.35,
-  "monthly_profit_delta_usd": 2100.00,
-  "payback_months": 4.8,
-  "roi": 2.4,
-  "veto_status": "PASSED",
-  "veto_reasons": [],
-  "fallback_suggestions": [],
-  "payback_curve": [
-    { "return_rate_reduction": 0.10, "payback_months": 9.6 },
-    { "return_rate_reduction": 0.35, "payback_months": 4.8 },
-    { "return_rate_reduction": 0.60, "payback_months": 3.1 }
-  ]
-}
-```
-
-否决规则（与 04-技术方案 §2.4 一致，`veto_reasons` 逐条返回中文劝退理由）：
-- `预计开模改造周期 > 90 天` 且 `预期品类生命周期 < 180 天` → 强制否决；
-- `单位改进成本增加额 > 当前毛利额 × 35%` 且无法提价 → 强制否决；
-- 触发否决时 `fallback_suggestions` 返回降级替代方案提示。
-
-### 9.2 任务财务决议 `GET /insight/tasks/{task_id}/financial`（P1-02）
-返回任务运行期 Agent 真实执行的财务否决结果（与 9.1 的沙盒模拟区分）。
-
-```json
-// data
-{
-  "task_id": "tsk_9f2c81a4",
-  "veto_status": "PASSED",
-  "checked_proposals": 6,
-  "vetoed_proposal_ids": ["prp_6c8f..."],
-  "veto_reasons": ["开模回收期长达 14 个月，已超出该品类 6 个月生命周期"],
-  "fallback_applied": true,
-  "retry_count": 1,
-  "financial_constraint": { "...": "任务创建时录入的参数" }
-}
-```
-
----
-
-## 十、扩展模块（P2）
-
-### 10.1 历史回测 `POST /backtest/run` / `GET /backtest/{backtest_id}`（P2-01）
-发起：`{ "task_id": "tsk_9f2c81a4", "slice_date": "2026-03-01" }` → `{ "backtest_id": "bt_77aa...", "status": "PENDING" }`。
-查询返回：
-
-```json
-// data
-{
-  "backtest_id": "bt_77aa...",
-  "task_id": "tsk_9f2c81a4",
-  "slice_date": "2026-03-01",
-  "status": "COMPLETED",
-  "accuracy_score": 0.78,
-  "cluster_verdicts": [
-    { "cluster_id": "clu_01", "cluster_name": "把手易断裂", "hit": true, "actual_trend": "同品类 2026 Q2 断裂类差评上升 22%" }
-  ]
-}
-```
-
-### 10.2 跨平台 SKU 映射 `GET /cross-platform/mapping`（P2-02）
-Query：`product_id`、`min_match_score`（默认 0.7）、分页。
-
-```json
-// data.items[]
-{
-  "product_id": "0d1f3a5e-...",
-  "asin": "B0C1234ABC",
-  "amazon_price_usd": 29.99,
-  "matches": [
-    {
-      "platform": "temu",
-      "external_sku": "TM-88213",
-      "title": "LED 台灯 折叠款",
-      "price_usd": 12.90,
-      "match_score": 0.91,
-      "commission_usd": 0.90,
-      "fulfillment_usd": 2.10
+      "review_id": "review_a",
+      "source_review_id": "source_example",
+      "asin": "B012345678",
+      "source_url": "https://www.amazon.com/gp/customer-reviews/EXAMPLE",
+      "rating": 1,
+      "language": "en",
+      "reviewed_at": "2026-08-14",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "text": "The armrest snapped.",
+      "translation": null,
+      "images": []
     }
   ],
-  "max_price_gap_usd": 17.09
+  "next_cursor": null
 }
 ```
 
-### 10.3 告警中心 `GET /alerts`（P1/P2）
-Query：`type`（`price_movement` 价格异动 / `buy_box` 跟卖与 Buy Box / `supply_chain` 供应链与原材料 / `veto` 风控熔断）、`is_read`、`severity`（`high`/`medium`/`low`）、分页。
+本例独立演示一条证据，URL 是格式占位，不是有效买家评价。真实接口必须返回采集到的来源。total 表示目标全部去重证据数，不是当前页长度；P1 加筛选后另返回 filtered_total，保留 total 供卡片核对。
+
+译文缺失为 null；P0 images 为空，因为尚未提供取证。P1 引用位置字段需明确使用 Unicode code point 偏移，前端按 code point 转换，避免多字节/emoji 高亮错位。
+
+## 6. SSE 事件与断线恢复
+
+### 6.1 GET /insight/task/{task_id}/events?after={seq}
+
+响应 `Content-Type: text/event-stream`，禁止代理缓冲和响应缓存。服务端建议每 15 秒发送注释心跳（部署默认，非 PRD 保证），心跳不落业务事件库。
+
+SSE 基础语法中的 event、data、id、retry 与注释心跳参考 [MDN 官方文档](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)。以下 seq、payload 与 reset 是应用协议设计。
+
+```text
+retry: 3000
+id: 13
+event: node.updated
+data: {"schema_version":1,"task_id":"task_example","seq":13,"item_id":"item_a","attempt":1,"occurred_at":"2026-09-10T08:00:18Z","payload":{"node":"clustering","status":"COMPLETED","duration_ms":2300}}
+
+: heartbeat
+
+```
+
+| event | payload |
+| --- | --- |
+| task.updated | status、cancel_requested_at、item_counts |
+| item.updated | status、current_node、progress、report_id、error |
+| node.updated | node、status、duration_ms、output_summary、skip_reason |
+| warning | code、message |
+| task.completed | status=COMPLETED、item_counts、warnings_count |
+| task.failed | status=FAILED、item_counts、error |
+| task.canceled | status=CANCELED、item_counts |
+| stream.reset | reason、snapshot_url；控制事件，无业务 seq/id |
+| stream.end | last_event_id、status；控制事件，无业务 seq/id |
+
+持久事件通用字段为 schema_version=1、task_id、seq、item_id、attempt、occurred_at、payload；任务级 item_id/attempt 为 null。seq 是任务内递增整数，SSE id 是它的十进制字符串；不同任务的 seq 不可比较。warning 文本不含原始凭据/评论全文。
+
+### 6.2 前端恢复顺序
+
+1. GET 任务快照得到 last_event_id，再用 `after=last_event_id` 建立流；若快照已终结，直接读取报告，无需新建流。
+2. 自动重连优先使用请求头 Last-Event-ID；没有时使用 after；两者均无则从 0 开始。非法/超前游标返回 422 `INVALID_EVENT_CURSOR`。服务端补发所有 seq 大于游标的事件，再继续等待新增记录，数据库查询是补发与实时的共同来源，避免切换订阅时漏事件。
+3. 浏览器按 seq 去重，忽略已经应用的事件；断线仅标“连接恢复中”，不得把业务任务改为 FAILED。切 task 时关闭旧 EventSource 并清空该任务的游标上下文。
+4. 若游标早于保留范围，返回 stream.reset 后关闭连接。客户端主动 close，重新 GET 快照并用新游标连接；reset 本身不推进业务游标。
+5. 收到任务终态事件后 close，并 GET 最终快照和报告。若终态事件已被游标消费，服务端发送 stream.end 让客户端关闭，避免不断重连一个已结束的任务。
+6. 首次/重连鉴权失效不降级成匿名流。EventSource 报错后客户端用任务 GET 检查 HTTP 状态；401 时关闭流并显示登录失效。服务端在会话失效后关闭长连接。
+
+原生 EventSource 使用命名事件监听器处理上述事件；每个打开的任务工作区只维持一个连接，而非每个 ASIN 一个连接。前端最终状态以 GET 快照为准。
+
+## 7. 取消与重试
+
+### 7.1 POST /insight/task/{task_id}/cancel
+
+无正文，操作天然幂等。活动任务返回 202：task_id、当前 status、cancel_requested_at；持久记录取消请求，worker 在安全边界停止。返回 202 不代表外部调用已被强制终止。
+
+终态任务返回 200 与原终态；重复取消不创建新请求时间。取消与发布在数据库事务中串行检查：先提交发布的结果保留，先提交取消标记的分项不再发布新报告。活动任务的取消最终落实为 CANCELED，但已完成分项仍可查；未提交产物的当前节点为 CANCELED，后续节点为 SKIPPED 且 skip_reason=CANCELED。
+
+### 7.2 POST /insight/task/{task_id}/retry
+
+需 Idempotency-Key，与创建接口相同的冲突规则。源任务必须已终结；正文：
 
 ```json
-// data.items[]
-{
-  "alert_id": "alr_01",
-  "type": "price_movement",
-  "severity": "high",
-  "title": "竞品 B0C1234ABC 降价 12%",
-  "message": "目标竞品 2 小时内降价 $3.4，可能发起促销对冲",
-  "related_product_id": "0d1f3a5e-...",
-  "related_task_id": null,
-  "is_read": false,
-  "created_at": "2026-09-05T07:30:00Z"
-}
+{"item_ids": ["item_b"]}
 ```
 
-标记已读：`PATCH /alerts/{alert_id}` 请求体 `{ "is_read": true }`。
+item_ids 必须非空、去重后不超过 10，全部属于源任务且为 FAILED；否则 409 `ITEM_NOT_RETRYABLE`。新建任务沿用原项目、站点和时间窗，绑定 parent_task_id 与所选 ASIN，返回创建接口的 202 结构及 parent_task_id。重试成功不改写源失败任务；取消后的重新分析使用普通创建接口。
 
----
+## 8. P1 / P2 契约扩展边界
 
-## 十一、错误码表
+- P1 图片证据增加观察、假设、bbox、source/image ID 与模型版本；bbox 缺失允许 null，不假定每次模型都能定位。
+- P1 财务单独建立“输入情景 → 计算结果”接口，绑定 report_id/version；必须定义币种、单位、费用版本、输入缺失与规则版本后再冻结路径与 schema。UI 调参不会重跑采集或改写原任务状态。
+- P2 回测与跨平台映射各有独立资源，先确认数据及评估指标；不在现有 task 上追加一个常量 backtest_accuracy。
+- 兼容性：新增可选字段不改变现有字段语义；新增必须字段、枚举解释或金额口径要升级契约。前端对未知事件忽略并刷新快照，不将未知状态视为完成。
 
-| code | HTTP | 含义 |
-| :--- | :--- | :--- |
-| 0 | 200 | 成功 |
-| 40001 | 400 | 通用参数错误（数量超限、日期区间非法等） |
-| 40101 | 401 | 未认证 / Token 失效 |
-| 40401 | 404 | 资源不存在（任务、提案、商品等） |
-| 40901 | 409 | 状态冲突（如对已完成任务发起取消） |
-| 42201 | 422 | ASIN 格式不合法 |
-| 42901 | 429 | 触发采集限频 / 缓存冷却期内重复提交 |
-| 50001 | 500 | 服务内部错误 |
-| 50201 | 502 | 上游依赖失败（电商平台抓取、LLM/VLM 调用超限，已按指数退避重试 3 次仍失败） |
+## 9. 联调验收清单
 
----
-
-## 十二、典型调用时序（前端参考）
-
-1. `POST /insight/tasks` 创建任务，取得 `tasks[].task_id`；
-2. 对每个任务 `GET /insight/tasks/{task_id}/events` 建立 SSE 连接，按 `step` 播放 7 步节点推进动画；
-3. 收到 `COMPLETED` 后关闭连接，`GET /insight/tasks/{task_id}/report` 拉取聚合结果渲染双栏看板；
-4. 用户点击"查看证据链" → `GET /proposals/{proposal_id}/evidence` 滑出抽屉；
-5. 老板拖动财务滑块 → `POST /financial/simulate` 实时刷新盈亏曲线与熔断横幅。
-
----
-
-## 附录：与 PRD / 技术方案的对应关系
-
-| 接口模块 | 支撑 PRD 功能 | 备注 |
-| :--- | :--- | :--- |
-| 洞察任务 + SSE | P0-01 采集引擎、P0-04 任务流看板 | `InsightState` 驱动，Celery + Redis 异步调度 |
-| clusters / reviews | P0-02 痛点聚类 | bge-m3 + pgvector HNSW，多语言标签对齐 |
-| proposals | P0-03 双栏改款 | `track_type` 对应 `reform_proposals.track_type` |
-| visual-evidences | P1-01 VLM 取证 | 对应 `review_images.vlm_analysis` |
-| financial simulate / 决议 | P1-02 财务否决 | 否决阈值见 9.1 |
-| evidence | P1-03 证据溯源 | 对应 `reform_proposals.evidence_review_ids / evidence_image_ids` |
-| backtest | P2-01 回测验证 | 输出 Backtest Accuracy Score |
-| cross-platform mapping | P2-02 跨平台映射 | 三平台价差与佣金履约测算 |
-| alerts | P2-03 供应链预警 | 兼容价格异动与风控熔断告警 |
+1. 相同幂等请求返回同一个 task；同键不同输入 409；不产生重复计费任务。
+2. 两个 ASIN 一个成功一个失败时，报告只展示成功分项，任务带完整分项结果与警告；全失败返回 FAILED。
+3. 报告、图表、证据使用相同 item/report 上下文；跨任务引用和跨租户读取被拒绝。
+4. SSE 断开期间的状态可补发；重复事件不重复渲染；过期游标 reset 后恢复；终态关闭连接。
+5. 成功采集但零有效评论与来源失败具有不同结果；没有证据时不生成建议、不生成 FBA/ROI 假数据。
+6. 取消不等于断开浏览器连接；取消/发布竞态、worker 租约过期、重试新任务均保持历史一致性。
+7. 多痛点共享评论时，建议证据数按并集去重，与抽屉 total 一致；分页和 P1 筛选不改变总体证据数。
+8. 后端实际 OpenAPI 与本草案逐项对照，前端执行 `bun run build`；实现前不可把本文件当作已部署接口证明。

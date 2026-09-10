@@ -1,13 +1,18 @@
+"""pytest 共享 fixture：FastAPI TestClient + fixtures 目录路径。"""
+
+from pathlib import Path
+
 import pytest
-import httpx
-from httpx import ASGITransport
+from fastapi.testclient import TestClient
 
-from main import create_app
+from app.main import create_app
 
 
-@pytest.fixture
-async def client():
-    app = create_app()
-    transport = ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+@pytest.fixture()
+def client() -> TestClient:
+    return TestClient(create_app())
+
+
+@pytest.fixture()
+def fixtures_dir() -> Path:
+    return Path(__file__).parent / "fixtures"

@@ -1,31 +1,33 @@
 [project]
-name = "backend"
+name = "insightx-backend"
 version = "0.1.0"
-description = "InsightX backend - AI market insight and decision system for cross-border e-commerce"
-readme = "README.md"
+description = "InsightX AI 市场洞察后端：单包双入口（FastAPI API + 独立 worker），uv 管理"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi[standard]>=0.141.1",
-    "langgraph>=1.2.11",
-    "sqlalchemy[asyncio]>=2.0.40",
-    "asyncpg>=0.30.0",
-    "redis>=6.0.0",
-    "pydantic-settings>=2.7.0",
-    "httpx>=0.28.0",
-    "pgvector>=0.4.1",
+  "fastapi>=0.141",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sqlalchemy[asyncio]>=2.0",
+  "asyncpg>=0.29",
+  "psycopg[binary]>=3.1",  # 仅 Alembic 同步迁移使用
+  "alembic>=1.13",
+  "pgvector>=0.3",
+  "httpx>=0.27",
 ]
-
-[project.optional-dependencies]
-# 本地真实 Embedding（bge-m3）运行时才需要；CI/测试不安装、不下载模型
-embedding = ["sentence-transformers>=5.0"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=1.0.0",
+  "pytest>=8.0",
 ]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["."]
+asyncio_mode = "strict"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
