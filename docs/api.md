@@ -1,6 +1,6 @@
 # InsightX API 接口文档
 
-| 文档版本 | V1.0 | 编制日期 | 2026-09-05 |
+| 文档版本 | V1.1（2026-09-10 修正补丁，依据《实施计划修正建议》R03-R09） | 编制日期 | 2026-09-05 |
 | :--- | :--- | :--- | :--- |
 | Base URL | `http://localhost:8000/api/v1` | 通信协议 | REST (JSON) + SSE |
 | 上游依据 | [PRD](PRD.md) · [04-技术方案](04-技术方案.md) | 适用阶段 | MVP（P0）→ 复赛（P1/P2） |
@@ -22,7 +22,7 @@
 { "code": 0, "message": "ok", "data": { } }
 ```
 
-- `code = 0` 表示成功，非 0 见[错误码表](#六错误码表)。
+- `code = 0` 表示成功终态收敛（任务 `COMPLETED / FAILED / CANCELED` 三态，`message` 为统一文本字段 R07），非 0 见错误码表。，非 0 见[错误码表](#六错误码表)。
 - 时间字段统一 ISO 8601 UTC（`2026-09-05T08:00:00Z`）；金额单位 USD，保留 2 位小数；比率字段用 0~1 小数。
 - 分页参数：`page`（从 1 起）、`page_size`（默认 20，最大 100）；分页响应 `data` 为 `{ "items": [...], "total": 128, "page": 1, "page_size": 20 }`。
 
@@ -31,7 +31,7 @@
 - SSE 长连接不经 Vite 代理缓冲（`EventSource` 直连或代理需关闭 buffer），后端通过 `CORSMiddleware` 放行前端来源。
 
 ### 1.4 幂等与缓存
-- 同一 ASIN 在缓存期内（建议 24h）重复创建分析任务时，复用已抓取的评论数据切片，仅重算后续 Agent 节点（对应 PRD NFR 数据幂等性）。
+- 同一 ASIN 在缓存期内（建议 24h）重复创建分析任务时，复用已抓取的评论数据切片，仅重算后续 Agent 节点（对应 PRD NFR 数据幂等性）。缓存键至少包含站点、来源、时间窗、样本上限/筛选、快照版本（不只按 ASIN）；数据缓存命中与重复创建任务的幂等性分开定义（R12）。
 
 ---
 
@@ -179,7 +179,7 @@ Query：`status`（PENDING/RUNNING/COMPLETED/FAILED/CANCELED）、`asin`、`page
 
 补充约定：
 - 心跳：服务端每 15s 下发一行 SSE 注释 `: ping`，防止代理断连。
-- 前端在收到 `COMPLETED` / `FAILED` 后 `EventSource.close()`；断线可依赖 EventSource 自动重连，服务端支持从 Redis 补发最近状态。
+- 前端在收到 `COMPLETED` / `FAILED` 后 `EventSource.close()`；断线可依赖 EventSource 自动重连，服务端支持从 Redis 补发最近状态。P1 若保持 Bearer 契约，SSE 须使用可携带请求头的流式请求实现并负责重连（原生 EventSource 不支持任意 Authorization header，禁止把长期 token 拼到 URL；若用 Cookie 会话须同步修改鉴权契约）。最近事件重放与按游标续传是两种语义，须明确区分；取消终态为 `CANCELED`（R07）。
 - `progress` 为 0-100 整数，仅供展示，后端不保证严格单调。
 
 ### 4.4 取消 / 重试
@@ -514,7 +514,7 @@ Query：`defect_category`、`min_confidence`（默认 0.6）、分页。
 }
 ```
 
-否决规则（与 04-技术方案 §2.4 一致，`veto_reasons` 逐条返回中文劝退理由）：
+否决规则（与 04-技术方案 §2.4 一致，`veto_reasons` 逐条返回中文劝退理由；财务公式、周期、数据来源、输入单位见修正建议 R09；缺参数显示“未评估”不自动判高收益；P0 体积重分档仅为情景模拟 R10）：
 - `预计开模改造周期 > 90 天` 且 `预期品类生命周期 < 180 天` → 强制否决；
 - `单位改进成本增加额 > 当前毛利额 × 35%` 且无法提价 → 强制否决；
 - 触发否决时 `fallback_suggestions` 返回降级替代方案提示。
