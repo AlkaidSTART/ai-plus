@@ -1,7 +1,7 @@
 # InsightX · 全球跨境电商 AI 市场洞察与动态决策系统
 # 产品需求文档 (PRD)
 
-| 文档版本 | V1.0 | 编制日期 | 2026-08-22 |
+| 文档版本 | V1.1（2026-09-10 修正补丁，依据《实施计划修正建议》） | 编制日期 | 2026-08-22 |
 | :--- | :--- | :--- | :--- |
 | 项目名称 | InsightX | 适用阶段 | 比赛初赛/复赛 & MVP 研发 |
 | 技术栈 | Vue 3.5 (Vite 8, 前后端分离 SPA) + FastAPI 0.141 + LangGraph 1.2 + PostgreSQL 18 / pgvector 0.8 + Redis 8 | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
@@ -40,7 +40,7 @@
 ## 三、功能清单 (Feature Roadmap)
 
 ### 3.1 优先级定义
-- **P0（MVP / 初赛核心）**：单平台（Amazon）评论采集、bge-m3 痛点聚类、双栏改款生成、可视化大盘。
+- **P0（MVP / 初赛核心）**：单品类 Amazon US 单站点已验证 ASIN/时间窗文本闭环、bge-m3 痛点聚类、双栏改款生成、可视化大盘。
 - **P1（复赛深化）**：Claude Vision 买家实拍图多模态取证、开模与履约成本逆向否决、全链路证据反查。
 - **P2（演进扩展）**：历史时间切片回测验证、跨平台（TikTok/Temu）数据对齐、供应链舆情信号监控。
 
@@ -53,7 +53,7 @@
 - 用户故事：As a 选品负责人, I want to 输入竞品 ASIN 即可一键抓取全量核心元数据与差评, So that 不需要手工导出 Excel 或购买昂贵零散插件。
 - 验收标准：
   1. 支持标准 10 位 ASIN 校验，单次提交支持 1-10 个竞品。
-  2. 抓取成功率 >= 95%，自动剔除无意义短评（如 "ok", "fast"）。
+  2. 200–500 条为样本目标（非普遍承诺）；限定已验证 ASIN/站点/时间窗，记录实际数量、缺失原因与分布，不足如实展示、禁止补造；95% 成功率须先定义成功条件/样本集/观察周期（R01）。自动剔除无意义短评（如 "ok", "fast"）。
   3. 结构化保存至 PostgreSQL 数据库 reviews 表中。
 
 [P0-02] 多语言痛点语义对齐与聚类分析
@@ -266,7 +266,7 @@ class InsightState(TypedDict):
     clustered_issues: List[Cluster]   # 痛点聚类结果
     proposals: List[ReformProposal]   # 双栏改款提议列表
     financial_constraint: Dict        # 成本预算与财务约束
-    veto_status: str                  # 'PASSED' | 'VETOED'
+    veto_status: str                  # 'PASSED' | 'VETOED' | 'NOT_EVALUATED'（P0 未执行财务时用 NOT_EVALUATED；任务终态 COMPLETED/FAILED/CANCELED 与财务决议分离）
     evidence_links: List[EvidenceMap] # 方案到原始评论的关联映射
     retry_count: int                  # 财务打回重试计数
     current_node: str                 # 当前执行节点名
@@ -322,7 +322,8 @@ class InsightState(TypedDict):
 
 | 阶段 | 周期 | 核心里程碑交付物 | 关键责任模块 |
 | :--- | :--- | :--- | :--- |
-| **M1: 架构与原型搭设** | 第 1 周 (Day 1-7) | • 前后端分离仓库初始化（frontend/ + backend/）<br>• PostgreSQL/pgvector 数据库表结构初始化<br>• Vue 3 + Vite UI 框架与 Dashboard 原型搭建 | 全员 / 前端 |
+| **M0-A: 数据与模型验证（新增，前置）** | 第 0–1 周 | • 5–10 个 child ASIN 试采（原文/图片关联/分页/时间覆盖/费用）<br>• 候选 Active 模型可调用性 + 小样质量 + 单任务成本 | 后端/数据、AI、产品 |
+| **M1: 架构与原型搭设** | 第 1 周 (Day 1-7) | • 前后端分离仓库初始化（frontend/ + backend/)<br>• PostgreSQL/pgvector 数据库表结构初始化<br>• Vue 3 + Vite UI 框架与 Dashboard 原型搭建 | 全员 / 前端 |
 | **M2: P0 核心数据与算法闭环** | 第 2 周 (Day 8-14) | • Amazon 评论抓取与清洗管道联通<br>• bge-m3 向量化与 pgvector (HNSW) 检索跑通<br>• LangGraph 1.2 双栏改款 Agent 生成测试通过 | 后端 / AI 核心 |
 | **M3: 前后端联调与初赛交付** | 第 3 周 (Day 15-21) | • Vue 3 前端与 FastAPI SSE 状态流直连联调（CORS + EventSource）<br>• 双栏决策看板 + 证据链抽屉交互联调<br>• **完成初赛 Demo 录屏与申报材料提交** | 全员 |
 | **M4: P1 多模态与财务风控增强** | 第 4 周 (Day 22-28) | • 接入 Claude Vision 买家实拍图缺陷解析<br>• 财务否决熔断逻辑与抛重降阶算法上线<br>• 证据反向穿透交互完善 | AI 核心 / 后端 |
