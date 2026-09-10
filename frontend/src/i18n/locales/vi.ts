@@ -28,6 +28,16 @@ export default {
     agentReady: 'Sẵn sàng',
     marketplace: 'Thị trường',
     selectProduct: 'Chọn sản phẩm',
+    intro: 'Giới thiệu',
+    introTooltip: 'Xem lại giới thiệu sản phẩm',
+    login: 'Đăng nhập',
+    logout: 'Đăng xuất',
+    productLabel: 'Sản phẩm đối thủ',
+    products: {
+      B08N5WRWNW: 'Ghế công thái học',
+      B09V7K4P92: 'Máy xay nấu',
+      B0CX87M2L1: 'Trạm điện di động',
+    },
   },
   dashboard: {
     negativeRate: 'Tỷ lệ đánh giá tiêu cực',

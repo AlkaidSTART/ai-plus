@@ -28,6 +28,16 @@ export default {
     agentReady: 'พร้อมใช้งาน',
     marketplace: 'ตลาด',
     selectProduct: 'เลือกสินค้า',
+    intro: 'สาธิตระบบ',
+    introTooltip: 'เล่นการแนะนำระบบอีกครั้ง',
+    login: 'เข้าสู่ระบบ',
+    logout: 'ออกจากระบบ',
+    productLabel: 'สินค้าคู่แข่ง',
+    products: {
+      B08N5WRWNW: 'เก้าอี้เพื่อสุขภาพ',
+      B09V7K4P92: 'เครื่องปั่นอาหาร',
+      B0CX87M2L1: 'สถานีจ่ายไฟพกพา',
+    },
   },
   dashboard: {
     negativeRate: 'อัตราคำวิจารณ์เชิงลบ',

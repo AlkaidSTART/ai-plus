@@ -28,6 +28,16 @@ export default {
     agentReady: 'Siap',
     marketplace: 'Pasar',
     selectProduct: 'Pilih Produk',
+    intro: 'Tur Produk',
+    introTooltip: 'Putar ulang demo produk',
+    login: 'Masuk',
+    logout: 'Keluar',
+    productLabel: 'Produk Kompetitor',
+    products: {
+      B08N5WRWNW: 'Kursi Ergonomis',
+      B09V7K4P92: 'Blender Komersial',
+      B0CX87M2L1: 'Pembangkit Portabel',
+    },
   },
   dashboard: {
     negativeRate: 'Tingkat Ulasan Negatif',

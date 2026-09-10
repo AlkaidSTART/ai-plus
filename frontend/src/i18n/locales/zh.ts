@@ -28,6 +28,16 @@ export default {
     agentReady: '就绪',
     marketplace: '站点',
     selectProduct: '选择竞品',
+    intro: '产品演示',
+    introTooltip: '重新播放 GSAP 产品介绍',
+    login: '登录',
+    logout: '退出登录',
+    productLabel: '当前竞品',
+    products: {
+      B08N5WRWNW: '人体工学椅',
+      B09V7K4P92: '破壁料理机',
+      B0CX87M2L1: '便携储能电源',
+    },
   },
   dashboard: {
     negativeRate: '样本差评率',
