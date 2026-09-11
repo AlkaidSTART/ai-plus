@@ -38,17 +38,17 @@ bun run dev        # 开发服务器默认 http://localhost:5173
 ```bash
 cd backend
 uv sync            # 安装依赖
-uv run uvicorn main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
 启动后访问 `http://localhost:8000/docs` 查看自动生成的 OpenAPI 文档。
+
+说明：除 `/health` 外业务接口暂为 501 占位（见 plan/01-基础配置与迁移/plan.md），联调前不要当已实现接口使用。
 
 ## 文档
 
 完整方案文档见 [`docs/`](docs/)：
 
-- [01-基本信息](docs/01-基本信息.md) / [02-方案名称](docs/02-方案名称.md) / [03-方案概述](docs/03-方案概述.md)
-- [04-技术方案](docs/04-技术方案.md) — 模型选型、Agent 工作流、数据管道与前后端架构
-- [05-附加材料-系统架构与流程图](docs/05-附加材料-系统架构与流程图.md) — 架构图、状态机、部署拓扑
+- [技术方案](docs/技术方案.md) — 模型选型、Agent 工作流、数据管道与前后端架构
 - [PRD](docs/PRD.md) — 产品需求文档与里程碑排期
 - [API 接口文档](docs/api.md) — REST + SSE 接口契约（前后端并行开发依据）

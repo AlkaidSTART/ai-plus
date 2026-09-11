@@ -1,0 +1,13 @@
+{
+  "fixture": true,
+  "name": "合法零样本（合成数据）：清洗后无有效评论，后续节点跳过，分项正常结束",
+  "nodes": {
+    "ingestion": {"status": "completed", "duration_ms": 80, "output_summary": {"raw_count": 5}},
+    "normalization": {"status": "completed", "duration_ms": 20, "output_summary": {"valid_count": 0}},
+    "embedding": {"status": "skipped", "skip_reason": "EMPTY_SAMPLE"},
+    "clustering": {"status": "skipped", "skip_reason": "EMPTY_SAMPLE"},
+    "proposal": {"status": "skipped", "skip_reason": "EMPTY_SAMPLE"},
+    "evidence_validation": {"status": "skipped", "skip_reason": "EMPTY_SAMPLE"},
+    "publish": {"status": "skipped", "skip_reason": "EMPTY_SAMPLE"}
+  }
+}

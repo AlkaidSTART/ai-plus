@@ -5,13 +5,13 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.config import settings
+from app.config import settings, sync_db_url
 from app.db.base import Base
 
 import app.db.models  # noqa: F401 — 注册全部 P0 表到 Base.metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
+config.set_main_option("sqlalchemy.url", sync_db_url(settings.database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

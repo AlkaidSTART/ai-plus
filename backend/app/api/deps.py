@@ -1,14 +1,14 @@
-"""请求依赖：P0 预置单企业身份（真实鉴权接入后替换为会话解析）。"""
+"""请求依赖：可信服务端身份（P0 预置），生产默认拒绝预置。"""
 
-from fastapi import Request
+import uuid
+
+from fastapi import HTTPException
 
 from app.config import settings
 
 
-async def current_tenant_id(request: Request) -> str:
-    """P0：返回预置租户；所有资源查询必须携带该值做越权隔离（越权按 404）。"""
-    return request.headers.get("x-tenant-id", "tenant_preset")
-
-
-async def preset_project_id() -> str:
-    return settings.preset_project_id
+async def get_current_tenant_id() -> uuid.UUID:
+    """P0：预置租户来自服务端配置，不信任任何请求头；生产模式直接 401。"""
+    if settings.app_env == "prod":
+        raise HTTPException(status_code=401, detail="预置身份已禁用")
+    return uuid.UUID(settings.preset_tenant_id)

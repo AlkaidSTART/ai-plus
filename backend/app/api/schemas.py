@@ -1,6 +1,6 @@
 """P0 公共模型：状态枚举与请求/响应 schema，对齐 api.md §2/§4/§5。"""
 
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
@@ -101,3 +101,102 @@ class Proposal(BaseModel):
     verification_required: list[str] = []
     evidence_count: int
     photo_count: int = 0
+
+
+class RetryRequest(BaseModel):
+    item_ids: list[str]
+
+
+class TaskItemCreated(BaseModel):
+    item_id: str
+    asin: str
+    status: TaskStatus
+
+
+class TaskLinks(BaseModel):
+    self: str
+    events: str
+
+
+class TaskCreatedResponse(BaseModel):
+    task_id: str
+    status: TaskStatus
+    phase: Phase
+    reused: bool
+    window: Window
+    items: list[TaskItemCreated]
+    links: TaskLinks
+
+
+class RetryTaskResponse(TaskCreatedResponse):
+    parent_task_id: str
+
+
+class NodeState(BaseModel):
+    key: str
+    status: NodeStatus
+    duration_ms: Optional[int] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    output_summary: Optional[dict[str, Any]] = None
+    skip_reason: Optional[str] = None
+
+
+class ItemProgress(BaseModel):
+    completed_nodes: int
+    total_nodes: int
+    processed_reviews: int
+    total_reviews: Optional[int] = None
+
+
+class TaskItemSnapshot(BaseModel):
+    item_id: str
+    asin: str
+    status: TaskStatus
+    attempt: int = 1
+    current_node: Optional[str] = None
+    nodes: list[NodeState] = []
+    progress: Optional[ItemProgress] = None
+    report_id: Optional[str] = None
+    error: Optional[dict[str, Any]] = None
+
+
+class WarningItem(BaseModel):
+    code: str
+    message: str
+    item_id: Optional[str] = None
+
+
+class TaskSnapshotResponse(BaseModel):
+    task_id: str
+    project_id: str
+    phase: Phase
+    status: TaskStatus
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    cancel_requested_at: Optional[datetime] = None
+    last_event_id: str
+    item_counts: dict[str, int]
+    items: list[TaskItemSnapshot]
+    warnings: list[WarningItem] = []
+
+
+class TaskListItem(BaseModel):
+    task_id: str
+    project_id: str
+    created_at: datetime
+    status: TaskStatus
+    asins: list[str]
+    item_counts: dict[str, int]
+    warnings_count: int
+
+
+class TaskListResponse(BaseModel):
+    items: list[TaskListItem]
+    next_cursor: Optional[str] = None
+
+
+class CancelResponse(BaseModel):
+    task_id: str
+    status: TaskStatus
+    cancel_requested_at: Optional[datetime] = None
