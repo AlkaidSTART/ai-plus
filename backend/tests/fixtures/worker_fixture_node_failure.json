@@ -1,0 +1,13 @@
+{
+  "fixture": true,
+  "name": "节点永久失败（合成数据）：聚类失败后分项 FAILED，后续节点跳过",
+  "nodes": {
+    "ingestion": {"status": "completed", "duration_ms": 100, "output_summary": {"raw_count": 30}},
+    "normalization": {"status": "completed", "duration_ms": 25, "output_summary": {"valid_count": 22}},
+    "embedding": {"status": "completed", "duration_ms": 180, "output_summary": {"fragments": 40}},
+    "clustering": {"status": "failed", "error_kind": "permanent", "error": "synthetic clustering failure", "duration_ms": 50},
+    "proposal": {"status": "skipped", "skip_reason": "CASCADE"},
+    "evidence_validation": {"status": "skipped", "skip_reason": "CASCADE"},
+    "publish": {"status": "skipped", "skip_reason": "CASCADE"}
+  }
+}
