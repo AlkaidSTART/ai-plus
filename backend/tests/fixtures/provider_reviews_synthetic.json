@@ -1,0 +1,79 @@
+{
+  "synthetic": true,
+  "purpose": "阶段 02 离线契约样本：演示来源记录到 reviews 表的字段映射与覆盖口径。全部文本为自编通用表述，未经任何真实来源采集，不得计入成功率或业务统计。",
+  "category_assumption": "UNCONFIRMED：示例品类与 ASIN 仅为占位，真实首个品类与 5–10 个 child ASIN 待业务确认。",
+  "records": [
+    {
+      "source_review_id": "SYN-R-001",
+      "asin": "SYNTH001",
+      "title": "Armrest broke quickly",
+      "text": "The left armrest snapped after two weeks of normal office use.",
+      "rating": 1,
+      "language": "en",
+      "reviewed_at": "2026-07-02",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 14,
+      "images": []
+    },
+    {
+      "source_review_id": "SYN-R-002",
+      "asin": "SYNTH001",
+      "title": "Broke",
+      "text": "Broke after 2 days.",
+      "rating": 1,
+      "language": "en",
+      "reviewed_at": "2026-07-19",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 3,
+      "images": []
+    },
+    {
+      "source_review_id": "SYN-R-003",
+      "asin": "SYNTH001",
+      "title": "ok",
+      "text": "ok",
+      "rating": 5,
+      "language": "en",
+      "reviewed_at": "2026-08-01",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 0,
+      "images": []
+    },
+    {
+      "source_review_id": "SYN-R-004",
+      "asin": "SYNTH001",
+      "title": "Wackelt und riecht",
+      "text": "Der Stuhl wackelt stark und das Kunststoff riecht chemisch. Die Montageanleitung ist unklar.",
+      "rating": 2,
+      "language": "de",
+      "reviewed_at": "2026-08-11",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 6,
+      "images": []
+    },
+    {
+      "source_review_id": "SYN-R-005",
+      "asin": "SYNTH001",
+      "title": "Same as my earlier review",
+      "text": "The left armrest snapped after two weeks of normal office use.",
+      "rating": 1,
+      "language": "en",
+      "reviewed_at": "2026-08-20",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 1,
+      "images": []
+    },
+    {
+      "source_review_id": "SYN-R-006",
+      "asin": "SYNTH002",
+      "title": "Sin estrellas pero útil",
+      "text": "No le doy estrellas por el envío tardío, pero la silla en sí está bien.",
+      "rating": 3,
+      "language": "es",
+      "reviewed_at": "2026-08-25",
+      "observed_at": "2026-09-10T08:00:05Z",
+      "helpful_votes": 0,
+      "images": []
+    }
+  ]
+}

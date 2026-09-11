@@ -1,0 +1,13 @@
+{
+  "fixture": true,
+  "name": "全节点成功（合成数据，仅验证状态机/事件/终态，不产生真实报告）",
+  "nodes": {
+    "ingestion": {"status": "completed", "duration_ms": 120, "output_summary": {"raw_count": 40}},
+    "normalization": {"status": "completed", "duration_ms": 30, "output_summary": {"valid_count": 32}},
+    "embedding": {"status": "completed", "duration_ms": 200, "output_summary": {"fragments": 58}},
+    "clustering": {"status": "completed", "duration_ms": 90, "output_summary": {"clusters": 4}},
+    "proposal": {"status": "completed", "duration_ms": 150, "output_summary": {"proposals": 3}},
+    "evidence_validation": {"status": "completed", "duration_ms": 40, "output_summary": {"valid_refs": 12}},
+    "publish": {"status": "completed", "duration_ms": 20, "output_summary": {"fixture": true, "report": null}}
+  }
+}

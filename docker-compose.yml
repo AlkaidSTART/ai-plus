@@ -25,22 +25,42 @@ services:
       timeout: 3s
       retries: 10
 
+  migrate:
+    build: ./backend
+    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql+asyncpg://insightx:insightx@postgres:5432/insightx
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     build: ./backend
     environment:
       APP_ENV: prod
-      PROVIDER_MODE: real
-      TASK_STORE_BACKEND: db
-      EVENT_STORE_BACKEND: redis
       DATABASE_URL: postgresql+asyncpg://insightx:insightx@postgres:5432/insightx
       REDIS_URL: redis://redis:6379/0
-      BACKEND_CORS_ORIGINS: http://localhost:5173
+      CORS_ORIGINS: '["http://localhost:5173"]'
     ports:
       - "8000:8000"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
-      redis:
+
+  # P0：worker 当前为空轮询（阶段 04 接入真实执行），仅验证启动与数据库连通。
+  worker:
+    build: ./backend
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.worker"]
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql+asyncpg://insightx:insightx@postgres:5432/insightx
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
         condition: service_healthy
 
 volumes:
