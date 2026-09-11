@@ -361,10 +361,7 @@ onBeforeUnmount(() => {
     <main class="relative z-20 max-w-5xl mx-auto w-full px-6 flex flex-col items-center justify-center flex-1 py-4">
       <!-- Title Block -->
       <div class="text-center space-y-2 mb-6 max-w-2xl">
-        <div class="cinematic-title inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)] text-[11px] font-mono text-[#8a8f98]">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#7170ff] animate-pulse" />
-          <span>工贸一体出海专属 · 拒绝盲目跟风开模</span>
-        </div>
+
 
         <h1 class="cinematic-title text-2xl sm:text-4xl font-semibold tracking-tight text-[#f7f8f8] leading-tight">
           从海量差评取证，到工厂工程图纸
