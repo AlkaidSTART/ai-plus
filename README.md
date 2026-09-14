@@ -2,53 +2,59 @@
 
 基于 **AI 多模态取证 + Agent 决策闭环** 的出海选品与改款决策平台：将 Amazon / TikTok Shop / Temu 的多语言评论与买家实拍图，转化为工厂级双栏改款工程清单与逆向财务熔断决策。
 
-## 技术架构
+## 当前状态
 
-项目采用**前后端分离架构**，前后端仅通过 HTTP 协议通信（REST + SSE），由 FastAPI 的 CORS 中间件实现跨域放行：
+**当前工作区处于设计文档阶段，尚无可运行的前后端实现。** 以下是已确认的目标设计，不代表目录、依赖、接口、云端模型或部署已经落地。模型/数据来源可用性、质量、费用与性能仍待 M0/M1 验证。
 
-```
+**LLM、VLM、Embedding 全部使用云端 API**；项目侧只做编排、清洗、CPU 聚类与存储，不部署模型权重或 GPU/CUDA 推理。LLM/VLM 保留 Claude 云端方向；Embedding 优先验证 SiliconFlow `BAAI/bge-m3`（1024 维基线），实际账户、型号与维度通过验证后锁定。
+
+## 目标架构
+
+采用**轻量异构 monorepo + 模块化单体 + 独立 Worker**。前后端分别构建，只通过 HTTP（REST + SSE）通信；API、Worker 与任务派发器共用一个 Python 业务包，不拆微服务。
+
+```text
 ai-plus/
-├── frontend/    # Vue 3.5 + Vite 8 + TypeScript 前端 SPA
-│                 （Vue Router + Pinia + TailwindCSS + ECharts，bun 管理依赖）
-└── backend/     # Python FastAPI 后端（统一 REST API + SSE 流式推送 + JWT 鉴权）
-                  （LangGraph Agent 编排 + Celery + Redis，uv 管理依赖）
+├── frontend/         # Vue 应用；Bun + bun.lock（待初始化）
+├── backend/          # API、Celery Worker、LangGraph、outbox 派发器；uv + uv.lock（待初始化）
+├── contracts/        # 后端生成的 OpenAPI 与 SSE 事件 schema（待生成）
+├── compose.yaml      # Linux 容器联调/部署（待创建）
+├── docs/
+│   ├── architecture.md
+│   └── plans/
+├── AGENTS.md
+└── PRD.md
 ```
 
-| 层 | 技术栈 | 说明 |
-| :--- | :--- | :--- |
-| 前端 | Vue 3.5 / Vite 8 / TypeScript | 独立部署 SPA，`EventSource` 直连后端 SSE |
-| 后端 | FastAPI 0.141 / Python 3.12 | REST 业务接口 + SSE 实时事件流 + CORS |
-| AI 引擎 | LangGraph 1.2 / Claude / bge-m3 | 7 步 Agent 状态机：采集 → 取证 → 聚类 → 双栏改款 → 财务否决 → 溯源 → 回测 |
-| 数据层 | PostgreSQL 18 + pgvector / Redis 8 / MinIO | 结构化与向量混合检索、任务队列、多模态图像存储 |
+单仓库不要求统一跨语言包管理器。当前目标只有一个 JS 应用和一个 Python 包，先不引入 workspace、Turborepo/Nx 或空共享包；出现真实需求后再评估。
 
-## 快速开始
+| 层 | 选型 | 职责 |
+| --- | --- | --- |
+| 前端 | Vue 3、Vite、TypeScript strict、shadcn-vue（Reka UI + Tailwind CSS v4）、ECharts | SPA 工作台；CSS 变量浅色主题，不叠加第二套组件库 |
+| 状态 | Vue Router、TanStack Vue Query、Pinia | Query 管服务端数据；Pinia 管跨页 UI 状态 |
+| 后端 | Python 3.12、FastAPI、Pydantic 2、SQLAlchemy 2、psycopg 3、Alembic | HTTP、身份/租户、短事务与业务规则 |
+| 异步与工作流 | Celery + Redis、事务 outbox、LangGraph + PostgreSQL checkpointer | 可靠派发、节点编排、幂等恢复；不在 HTTP 请求中执行长任务 |
+| 数据与分析 | PostgreSQL + pgvector、云端 Embedding、scikit-learn | 证据与向量存储/检索，CPU 聚类；HNSW 按规模与召回测试决定 |
+| 云端模型 | Claude LLM/VLM；云端 BGE-M3 候选 | 仅后端持有凭证；受限流、预算、数据授权与质量验证约束 |
+| 契约与实时 | 后端 DTO → OpenAPI/事件 schema → TS 客户端；EventSource | 契约生成、有序 SSE 回放与真实状态展示 |
+| 验证 | vue-tsc、Vitest、Playwright；pytest、Ruff、mypy | 类型、组件、真实 PostgreSQL 集成、端到端与独立模型评测 |
 
-### 前端（Vue 3 + Vite）
+前端工具运行时采用 Node.js 24 LTS 基线；PostgreSQL 18 为数据库候选基线。具体补丁版本、数据库扩展和容器组合在实际初始化中验证后锁定，不将选型表当成已经通过的兼容性矩阵。
 
-```bash
-cd frontend
-bun install        # 或 npm install
-bun run dev        # 开发服务器默认 http://localhost:5173
-```
+## 分阶段交付
 
-开发环境下 Vite 会将 `/api` 请求代理至后端；生产环境通过 `VITE_API_BASE_URL` 指定后端地址。
+- **P0**：Amazon US 单品类、已验证 ASIN/时间窗的文本闭环；实际评论样本 → 云端 Embedding → CPU 聚类 → 云端 LLM 双栏建议 → 基础证据反查与 SSE 看板。样本不足不补造，财务为 `NOT_EVALUATED`。
+- **P1**：云端视觉取证、确定性财务否决、图片与深度证据反查。
+- **P2**：历史回测、TikTok/Temu 映射和供应链信号；不作为当前已实现功能。
 
-### 后端（FastAPI）
+## 开发与实施
 
-```bash
-cd backend
-uv sync            # 安装依赖
-uv run uvicorn app.main:app --reload --port 8000
-```
+当前没有可执行的项目安装/启动命令。后续先完成 M0 数据/云端模型验证，再按独立计划初始化仓库、契约和一个真实 ASIN 的端到端链路；每次实施遵循“计划 → 确认 → 执行 → 验证 → 结果”。
 
-启动后访问 `http://localhost:8000/docs` 查看自动生成的 OpenAPI 文档。
-
-说明：除 `/health` 外业务接口暂为 501 占位（见 plan/01-基础配置与迁移/plan.md），联调前不要当已实现接口使用。
+目标部署优先采用同域反向代理与服务端会话；Windows 开发使用 Docker Desktop/WSL2 的 Linux Worker，不承诺 Celery 原生 Windows 支持。普通 CI 使用明确标识的 fixture/mock；真实云端调用单独批准并设置预算，不能以 mock 通过宣称模型已接通。
 
 ## 文档
 
-完整方案文档见 [`docs/`](docs/)：
-
-- [技术方案](docs/技术方案.md) — 模型选型、Agent 工作流、数据管道与前后端架构
-- [PRD](docs/PRD.md) — 产品需求文档与里程碑排期
-- [API 接口文档](docs/api.md) — REST + SSE 接口契约（前后端并行开发依据）
+- [PRD](PRD.md) — 产品需求、阶段边界与验收目标
+- [架构与技术选型](docs/architecture.md) — monorepo、前后端、云端模型、任务/证据、安全、测试与官方参考
+- [工作约定](AGENTS.md) — 强制计划、审批和结果记录流程
+- [本次获批设计计划](docs/plans/2026-09-12-monorepo-architecture-selection/plan.md) — R1 云端方案与真实审批记录

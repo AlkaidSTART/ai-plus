@@ -3,20 +3,31 @@
 Working agreement for AI coding agents: project facts, non-negotiable principles,
 and the mandatory per-task plan, approval, implementation, and result workflow.
 
+## 任务执行入口（必读）
+
+**每次实施任务必须：只读了解 → 写 `plan.md` → 展示计划并等待用户明确确认 → 按获批 `plan.md` 执行 → 验证 → 单独写 `result.md` → 汇报。**
+
+- 所有实施任务（包括文档修改）均适用。每任务使用 `docs/plans/YYYY-MM-DD-<任务简称>/`，计划与结果同目录。
+- 未获批准只可只读探索、创建当前任务目录及编写或修订其中的 `plan.md`；展示计划后必须停止等待，不能将初始任务请求当作批准。
+- 实质性变更先修订计划并重新审核；执行结果如实记录，不得预建成功结果或把结果混写回计划。
+- 纯阅读、解释和讨论无需强制生成计划与结果；一旦涉及实施，必须先走上述流程。详细约束及最小模板见下文。
+
 ## Project Facts
 
 - InsightX: AI market-insight and decision system for cross-border e-commerce.
-  Frontend and backend are separated and communicate only over HTTP (REST + SSE).
-- `frontend/`: Vue 3 + Vite + TypeScript, dependencies managed with bun.
-- `backend/`: FastAPI + LangGraph, Python >= 3.12, dependencies managed with uv.
-- Common commands:
-  - Frontend: `bun install` / `bun run dev` / `bun run build` (includes vue-tsc type check)
-  - Backend: `uv sync` / `uv run uvicorn main:app --reload --port 8000` (`/docs` serves OpenAPI)
-- Authoritative docs live in `docs/`: `PRD.md` (requirements & milestones),
-  `api.md` (REST + SSE API contract), `04-技术方案.md` (architecture & tech choices).
-- README and docs describe the target design; the code may lag behind. Treat the
-  actual code as the source of truth. If docs and code disagree, point it out and
-  confirm first — never invent an implementation to match the docs.
+  Target architecture: separate frontend and backend communicating only over HTTP
+  (REST + SSE).
+- Requirements and milestones: root [`PRD.md`](PRD.md).
+- Target frontend module `frontend/`: Vue 3 + Vite + TypeScript, with bun for dependencies.
+- Target backend module `backend/`: FastAPI + LangGraph, Python >= 3.12, with uv for dependencies.
+- These modules describe the intended layout, not proof that code exists. Inspect
+  the working tree and actual manifests/configuration before choosing installation,
+  build, test, or startup commands; do not assume an entry point or script exists.
+- Do not assume API contracts or architecture docs exist under `docs/`. Locate and
+  read them if present; explicitly report missing documents rather than inventing them.
+- README and PRD describe the target design, not completed functionality. Treat the
+  actual code and verification results as evidence of implementation. If docs and code
+  disagree, point it out and confirm first — never invent an implementation to match the docs.
 
 ## Four Principles
 
@@ -55,14 +66,71 @@ requires them.
 本节为项目级强约束，适用于每次在本仓库落地的实施任务（改代码、改配置、改文档、装依赖、数据迁移等），不因任务简单而跳过：
 
 1. **一任务一目录**：只读探索后，在 `docs/plans/YYYY-MM-DD-<任务简称>/` 中先生成 `plan.md`。同一任务的修订沿用原目录，同日同名的独立任务加序号，禁止覆盖旧任务。
-2. **计划必须可审核**：`plan.md` 至少包含目标、当前事实及依据、预计变更文件、实施步骤、验证与验收、风险与非目标、审核状态。未获批准时标记“待审核”，提交计划路径和摘要后必须停止等待。
+2. **计划必须可审核且可直接据以实施**：`plan.md` 至少包含目标、当前事实及依据、预计变更文件、实施步骤、验证与验收、风险与非目标、审核状态。计划必须写到可直接执行的细度：具体技术选型与版本、设计参数（色值、字号、字重、间距、布局尺寸等）、文件级变更内容、逐条执行步骤；不得只写“将产出另一份计划/设计文档”式的元计划或指导性说明——plan.md 本身就是详细实施计划。未获批准时标记“待审核”，提交计划路径和摘要后必须停止等待。
 3. **批准后才能实施**：必须由用户在计划展示后明确批准，并在 `plan.md` 记录真实批准信息。初始任务请求不代表批准尚未展示的计划；不得补造审批记录。
 4. **审核前的唯一写入例外**：允许只读探索，以及创建当前任务目录、编写或修订其中的 `plan.md`；不得提前改其他项目文件、安装依赖或执行其他实施操作。本条优先于全局附录中“审核前不得修改文件”的一般约束；其余审批门禁不变。
 5. **严格按计划实施**：只实施获批范围。范围、验收标准或其他实质性变化必须先修改 `plan.md`、说明原因并重新等待审核；批准范围内的细节调整在结果中如实说明。
 6. **结果单独落盘**：实施结束并完成验证后，在同一目录生成 `result.md`，至少包含完成状态、实际变更、实施记录、验证命令与真实结果、计划偏差、遗留问题及未执行检查；同时向用户提供结果路径和摘要。不得把实施结果混写回 `plan.md`，不得用结果替代计划，也不得提前生成成功结果。根目录 `plan/` 下的分阶段计划同样适用：某阶段实施完成后，在该阶段目录（如 `plan/01-基础配置与迁移/`）生成 `result.md`；文件名统一为 `result.md`，不用 `results.md`；未实施的阶段不得预建结果文件。
 7. **失败不得伪装完成**：阻塞、失败或中止也必须在 `result.md` 如实记录状态、原因和剩余工作；有未解决的失败或必需工作未完成时不得标记完成。
 
-无事前计划、无明确审批或无结果文件的实施视为未完成。历史迁移记录必须标注其事后整理性质，不作为事前审批证据。目录说明与模板见 `docs/plans/README.md`。
+无事前计划、无明确审批或无结果文件的实施视为未完成。历史迁移记录必须标注其事后整理性质，不作为事前审批证据。最小模板见下文，不依赖其他模板文件。
+
+### plan.md 最小模板
+
+在当前任务目录填写以下模板，初始审核状态为“待审核”；收到明确批准后仅更新真实审批信息。实质性修订仍须重新审核。
+
+```markdown
+# <任务名称>：实施计划
+
+## 目标
+<可观察、可验收的目标>
+
+## 当前事实及依据
+<已读文件、相关代码或命令证据；明确尚未确认的事项>
+
+## 预计变更文件
+<文件路径、预计修改内容和范围边界>
+
+## 实施步骤与分工
+<按顺序列出获批后执行的步骤及分工；不使用子代理时简述原因>
+
+## 验证与验收
+<拟执行的检查命令、预期验收条件，以及不适用或不可用的检查>
+
+## 风险与非目标
+<风险、假设及明确不做的事项>
+
+## 审核状态
+- 状态：待审核
+- 创建日期：<实际日期>
+- 批准信息：<初始为“未批准”；收到确认后记录真实日期与用户原文，并更新审核状态>
+```
+
+### result.md 最小模板
+
+实施结束并完成可执行的验证后，在同一目录填写；阻塞、失败或中止也必须如实记录，不得预填“已完成”或虚构验证通过。
+
+```markdown
+# <任务名称>：实施结果
+
+## 完成状态
+<按实际情况填写：已完成 / 部分完成 / 阻塞 / 失败 / 中止；未完成时说明原因>
+
+## 实际变更
+<实际修改的文件路径与内容，不把计划中的工作当作已完成>
+
+## 实施记录
+<对照获批计划说明实际执行步骤、分工及其结果>
+
+## 验证命令与真实结果
+<逐条记录实际执行的命令或检查方式及真实结果；失败不得省略>
+
+## 计划偏差
+<偏差及原因；实质性变化对应的重新审批记录；无偏差时明确写“无”>
+
+## 遗留问题与未执行检查
+<剩余工作、已知限制、未执行检查及原因；无遗留问题时如实说明>
+```
 
 ---
 
