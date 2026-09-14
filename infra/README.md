@@ -17,7 +17,27 @@
 
 ## 启动
 
-在仓库根目录执行：
+推荐在仓库根目录执行一键启动脚本：
+
+```bash
+./infra/start.sh
+```
+
+脚本会根据自身位置定位 `infra/compose.yaml`，因此可从任意工作目录执行；上面的示例以仓库根目录为前提。脚本会检查 Docker 环境，构建并启动全部服务，等待 `db`、`redis`、`api`、`web` 达到健康状态，最后显示实际访问地址。
+
+如需更换 Web 端口：
+
+```bash
+APP_PORT=18080 ./infra/start.sh
+```
+
+默认可通过 `STARTUP_TIMEOUT` 调整健康等待上限，单位为秒：
+
+```bash
+STARTUP_TIMEOUT=300 ./infra/start.sh
+```
+
+如需手工控制 Compose，也可以在仓库根目录执行：
 
 ```bash
 docker compose -f infra/compose.yaml up -d --build
@@ -29,7 +49,7 @@ docker compose -f infra/compose.yaml up -d --build
 - API 健康检查：<http://localhost:8080/api/v1/health>
 - OpenAPI 文档：当前未通过 Web 同域代理暴露；本地后端开发时可访问 <http://localhost:8000/docs>。
 
-如需更换宿主端口：
+手工启动时如需更换宿主端口：
 
 ```bash
 APP_PORT=18080 docker compose -f infra/compose.yaml up -d --build
