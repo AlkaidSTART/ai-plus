@@ -2,4 +2,5 @@
 .hermes
 AGENTS.md
 frontend/node_modules
+backend/artifacts/
 .env.local
