@@ -1,12 +1,12 @@
 # InsightX · 全球跨境电商 AI 市场洞察与动态决策系统
 # 产品需求文档 (PRD)
 
-| 文档版本 | V1.2（2026-09-12：monorepo、全云端模型与验收边界修订） | 编制日期 | 2026-08-22 |
+| 文档版本 | V1.3（2026-09-14：Playwright + MongoDB 原始 DOM 快照边界同步） | 编制日期 | 2026-08-22 |
 | :--- | :--- | :--- | :--- |
 | 项目名称 | InsightX | 适用阶段 | 比赛初赛/复赛 & MVP 研发 |
-| 技术方向 | Vue 3 / Vite / TypeScript / shadcn-vue（Tailwind CSS v4）+ FastAPI / LangGraph / Celery + PostgreSQL / pgvector / Redis；LLM、VLM、Embedding 全部使用云端 API | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
+| 技术方向 | Vue 3 / Vite / TypeScript / shadcn-vue（Tailwind CSS v4）+ FastAPI / LangGraph / Celery + PostgreSQL / pgvector / Redis + Playwright / MongoDB；LLM、VLM、Embedding 全部使用云端 API | 核心定位 | 工业级出海选品、改款决策与动态风控引擎 |
 
-**实施状态**：本文件定义产品目标，不代表功能已经实现。当前工作区尚无可运行的前后端代码、依赖清单或模型接入；实际完成情况以实施验证与结果记录为准。
+**实施状态**：本文件定义产品目标，不代表完整产品已经实现。当前工作区已有前端脚手架、FastAPI 基础入口、独立单 URL DOM 爬虫（Playwright Chromium、DOM JSON 与 MongoDB 原始快照双写）和单机容器基座；完整业务 API、Worker/LangGraph、评论抽取与模型链路尚待实现。实际完成情况以实施验证与结果记录为准。
 
 **架构依据**：[架构与技术选型](docs/architecture.md)。采用 `frontend/` + `backend/` 的轻量异构 monorepo，Bun/uv 分别管理依赖，前后端仅经 REST + SSE 通信。项目侧只做编排、清洗、CPU 聚类与存储，不部署模型权重或 GPU/CUDA 推理；精确依赖版本、云端供应商与模型 ID 在 M0/M1 验证后锁定，不在 PRD 中固定未经验证的小版本。
 
@@ -58,7 +58,7 @@
 - 验收标准：
   1. 支持标准 10 位 ASIN 校验，单次提交支持 1-10 个竞品；批次保留每个 ASIN 的独立状态、实际样本量和失败原因。
   2. 200–500 条为样本目标（非普遍承诺）；限定已验证 ASIN/站点/时间窗，记录实际数量、缺失原因与分布，不足如实展示、禁止补造；95% 成功率须先定义成功条件/样本集/观察周期。自动剔除无意义短评（如 "ok", "fast"），保留清洗数量与规则记录。
-  3. 原始评论、来源、评论/采集时间及输入快照结构化保存至 PostgreSQL；缺失不伪填，合成 fixture 不能作为真实采集数据。
+  3. 原始 DOM 与采集元数据作为不可变快照保存至 MongoDB，并保留 DOM JSON 文件副本；结构化评论、来源、评论/采集时间及业务输入快照保存至 PostgreSQL。MongoDB 不作为评论、任务或报告等业务事实源；缺失不伪填，合成 fixture 不能作为真实采集数据。
   4. 零有效评论时展示“数据不足”，不继续生成虚构痛点或建议；采集失败与成功采集但无数据须区分。
 
 [P0-02] 多语言痛点语义对齐与聚类分析
@@ -241,6 +241,7 @@ sequenceDiagram
     participant Queue as Redis 与 Celery
     participant Worker as Worker 与 LangGraph
     participant Source as 已验证数据来源
+    participant Mongo as MongoDB 原始 DOM 快照
     participant Embed as 云端 Embedding API
     participant AI as 云端 LLM API
     participant Vision as 云端 VLM API
@@ -260,7 +261,9 @@ sequenceDiagram
             Note over Worker,Store: 每个节点的状态变更均写入有序事件
             Worker->>Source: 在授权与已验证时间窗内采集
             Source-->>Worker: 实际元数据、评论和覆盖说明
-            Worker->>Store: 保存原文、清洗结果与输入快照
+            Worker->>Mongo: 写入不可变原始 DOM JSON 与采集元数据
+            Mongo-->>Worker: snapshot_id 与 DOM 哈希
+            Worker->>Store: 保存清洗结果、业务记录与关联输入快照
             alt 有有效评论
                 Worker->>Embed: 调用云端 Embedding API
                 Embed-->>Worker: 向量、模型信息与用量
@@ -297,7 +300,7 @@ sequenceDiagram
     Web->>User: 展示真实状态、报告与可反查证据
 ```
 
-采集、云端调用、节点或 Worker 失败时记录原因与可恢复状态，不把失败当作无数据。事件、报告和 LangGraph checkpoint 各有职责：业务记录与有序事件在 PostgreSQL 持久化，checkpointer 用于图恢复，重放仍需幂等；它们不是天然跨步骤原子事务。SSE 断开不取消任务，取消由 REST 显式提交并在节点边界处理。
+采集、云端调用、节点或 Worker 失败时记录原因与可恢复状态，不把失败当作无数据。MongoDB 只保存原始 DOM 与采集元数据，PostgreSQL 仍是评论、证据、任务、报告和事件的事实源；两者之间没有分布式事务，通过 `snapshot_id`、`dom_sha256` 和幂等消费对账。事件、报告和 LangGraph checkpoint 各有职责：业务记录与有序事件在 PostgreSQL 持久化，checkpointer 用于图恢复，重放仍需幂等；它们不是天然跨步骤原子事务。SSE 断开不取消任务，取消由 REST 显式提交并在节点边界处理。
 
 ### 6.2 任务、工作单元与图状态（概念模型）
 
