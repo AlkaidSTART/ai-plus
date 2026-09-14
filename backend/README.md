@@ -11,9 +11,8 @@ InsightX 后端：FastAPI + LangGraph，前后端分离，仅通过 REST + SSE �
 ## 启动
 
 ```bash
-cp .env.example .env   # 按需修改
 uv sync
-uv run uvicorn main:app --reload --port 8000
+uv run uvicorn insightx.main:app --reload --port 8000
 ```
 
 - API 文档：http://localhost:8000/docs
@@ -24,20 +23,25 @@ uv run uvicorn main:app --reload --port 8000
 
 ```bash
 uv run pytest -q
+uv run ruff check .
+uv run mypy src
 ```
 
 测试完全离线，不依赖 PostgreSQL / Redis / 外部 AI 服务。
 
-## 目录结构
+## 当前目录结构
 
 ```text
 backend/
-├── main.py            # FastAPI 入口，唯一挂载 /api/v1 前缀的位置
-├── api/               # 路由、统一响应 Envelope、错误码、依赖
-├── core/              # 配置（pydantic-settings）、Redis client
-├── db/                # async engine / session / Base / models / repositories
-├── runtime/           # Task / Event 存储与运行时
-├── services/          # 业务服务层
-├── agents/            # LangGraph 状态机
-└── tests/             # pytest（离线）
+├── pyproject.toml       # 依赖、构建与工具配置
+├── uv.lock              # uv 锁定依赖
+├── src/insightx/
+│   ├── main.py          # FastAPI 应用工厂与模块级 app
+│   └── api/
+│       ├── router.py    # 聚合路由
+│       └── v1/
+│           └── health.py
+└── tests/               # pytest（离线）
 ```
+
+数据库连接、Alembic 迁移、Celery Worker、outbox 派发器和 LangGraph 图尚未接入；`/health` 在真实探针实施前保持 `degraded`。
