@@ -29,7 +29,7 @@ and the mandatory per-task plan, approval, implementation, and result workflow.
   actual code and verification results as evidence of implementation. If docs and code
   disagree, point it out and confirm first — never invent an implementation to match the docs.
 
-## Four Principles
+## Five Principles
 
 ### 1. Minimal closed loop
 
@@ -60,6 +60,17 @@ mention them as a suggestion when wrapping up. When a requirement is ambiguous,
 take the minimal interpretation, state it, and proceed — do not widen scope. New
 dependencies, config options, and APIs default to "no" unless the task explicitly
 requires them.
+
+### 5. 需求偏差同步文档，外部访问链接配置化
+
+当已确认的实际需求或已验证的实现约束与 `README.md`、`PRD.md`、设计/API 文档或其他需求文档不一致时：
+
+- 以已确认的实际需求和已验证的实现作为调整依据；文档不是唯一依据，不得为了迎合过时文档而强行实现。
+- 先指出偏差。若偏差改变已批准范围、公开行为、架构、数据/模式、认证授权、依赖、兼容性或部署策略，必须先修订 `plan.md` 并重新获得批准。
+- 获批后，在同一任务中同步更新受影响的文档，使其反映实际需求和已实现行为；文档同步本身也必须留在获批范围内。
+- 文档与代码冲突时必须明确报告，不得虚构实现来迎合文档。
+
+运行时访问外部服务的链接（例如亚马逊官网地址）不得硬编码在源码中，必须通过环境变量提供并由项目配置层读取。应同步维护环境变量示例文件中的变量名和非敏感占位值；不得提交真实密钥或环境专属值。仅作为文档引用或资料出处的静态超链接不属于运行时访问链接。
 
 ## 任务计划与结果记录（强约束）
 
