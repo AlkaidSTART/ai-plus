@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Inbox, Sparkles } from '@lucide/vue'
+import { Inbox, Loader2, Sparkles } from '@lucide/vue'
 import EmptyState from '@/components/EmptyState.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import SseTimeline from '@/components/SseTimeline.vue'
@@ -12,12 +12,10 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useUiStore } from '@/stores/ui'
+import { useTaskList } from '@/composables/useTasks'
 
-/**
- * 战略决策大盘（PRD 5.1）。
- * 后端就绪前全部区块为空态；KPI 为采样口径，财务熔断 P0 恒「未评估」。
- */
 const ui = useUiStore()
+const { data: taskPage, isLoading: tasksLoading } = useTaskList({ limit: 20 })
 </script>
 
 <template>
@@ -73,11 +71,41 @@ const ui = useUiStore()
         <CardDescription>批次任务与单 ASIN 工作单元状态（含部分失败原因）。</CardDescription>
       </CardHeader>
       <CardContent>
+        <div v-if="tasksLoading" class="flex items-center justify-center py-8">
+          <Loader2 class="size-5 animate-spin text-muted-foreground" />
+        </div>
         <EmptyState
+          v-else-if="!taskPage?.items.length"
           :icon="Inbox"
           title="暂无任务"
           description="点击右上角「新建诊断任务」提交 1-10 个 Amazon US ASIN"
         />
+        <div v-else class="divide-y">
+          <div
+            v-for="task in taskPage.items"
+            :key="task.task_id"
+            class="flex items-center justify-between py-3 text-sm"
+          >
+            <div class="space-y-0.5">
+              <p class="font-medium font-mono text-xs">{{ task.task_id }}</p>
+              <p class="text-muted-foreground text-xs">
+                {{ task.total_items }} 个 ASIN · {{ task.window.preset }} · {{ new Date(task.created_at).toLocaleString() }}
+              </p>
+            </div>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="{
+                'bg-yellow-100 text-yellow-800': task.status === 'QUEUED',
+                'bg-blue-100 text-blue-800': task.status === 'RUNNING',
+                'bg-green-100 text-green-800': task.status === 'COMPLETED',
+                'bg-red-100 text-red-800': task.status === 'FAILED',
+                'bg-gray-100 text-gray-800': task.status === 'CANCELED',
+              }"
+            >
+              {{ task.status }}
+            </span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   </div>

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { ChevronDown } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
+import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -26,17 +27,17 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useUiStore } from '@/stores/ui'
+import { useCreateTask } from '@/composables/useTasks'
+import type { TaskCreateRequest } from '@/api/client'
 
-/**
- * 新建诊断任务对话框（PRD 5.1 任务流快速触发器）。
- * 后端契约（POST /api/v1/tasks）就绪前提交保持禁用，不生成假任务。
- */
 const ui = useUiStore()
 const { newTaskDialogOpen } = storeToRefs(ui)
 
 const asinsInput = ref('')
 const site = ref('amazon-us')
-const timeWindow = ref('6m')
+const timeWindow = ref<'1m' | '3m' | '6m'>('6m')
+
+const { mutate: submitTask, isPending } = useCreateTask()
 
 const asinList = computed(() =>
   asinsInput.value
@@ -51,6 +52,31 @@ const asinError = computed<string | null>(() => {
   const invalid = asinList.value.filter((a) => !/^[A-Za-z0-9]{10}$/.test(a))
   return invalid.length ? `无效 ASIN：${invalid.join('、')}（标准 10 位）` : null
 })
+
+const canSubmit = computed(() => asinList.value.length > 0 && !asinError.value && !isPending.value)
+
+function handleSubmit() {
+  if (!canSubmit.value) return
+  const body: TaskCreateRequest = {
+    asins: asinList.value,
+    platform: 'amazon',
+    marketplace: 'US',
+    window: { preset: timeWindow.value },
+  }
+  submitTask(
+    { body, idempotencyKey: crypto.randomUUID() },
+    {
+      onSuccess: (data) => {
+        toast.success(`任务已创建：${data.items.length} 个 ASIN`)
+        newTaskDialogOpen.value = false
+        asinsInput.value = ''
+      },
+      onError: (err) => {
+        toast.error(`提交失败：${err.message}`)
+      },
+    },
+  )
+}
 </script>
 
 <template>
@@ -117,11 +143,10 @@ const asinError = computed<string | null>(() => {
 
       <DialogFooter>
         <Button variant="outline" @click="newTaskDialogOpen = false">取消</Button>
-        <Button disabled title="后端契约就绪前不可提交">提交任务</Button>
+        <Button :disabled="!canSubmit" @click="handleSubmit">
+          {{ isPending ? '提交中…' : '提交任务' }}
+        </Button>
       </DialogFooter>
-      <p class="text-right text-xs text-muted-foreground">
-        提交将在 POST /api/v1/tasks 契约生成后接入，当前不生成任何任务。
-      </p>
     </DialogContent>
   </Dialog>
 </template>
