@@ -24,7 +24,7 @@ const ui = useUiStore()
   <div class="mx-auto w-full max-w-[1440px] space-y-6 p-4 lg:p-6">
     <div class="flex animate-enter items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">战略决策大盘</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">决策大盘</h1>
         <p class="mt-1 text-sm text-muted-foreground">
           聚合监控品类的全局体检状态；指标均为采样口径，时间窗以任务为准。
         </p>

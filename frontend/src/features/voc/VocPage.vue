@@ -28,7 +28,7 @@ const ui = useUiStore()
 <template>
   <div class="mx-auto w-full max-w-[1440px] space-y-6 p-4 lg:p-6">
     <div class="animate-enter">
-      <h1 class="text-2xl font-semibold tracking-tight">多模态评论洞察</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">评论洞察</h1>
       <p class="mt-1 text-sm text-muted-foreground">
         从多语言评论中聚类的高频痛点；最多展示 5 类有证据痛点，不足不补齐。
       </p>
