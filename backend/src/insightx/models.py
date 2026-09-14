@@ -1,6 +1,6 @@
 """Persistence models for tasks, reports, evidence, and delivery state."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
@@ -23,7 +23,7 @@ from insightx.database import Base
 def utc_now() -> datetime:
     """Return a timezone-aware UTC timestamp."""
 
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Task(Base):
@@ -145,7 +145,13 @@ class Evidence(Base):
 
     __tablename__ = "evidence"
     __table_args__ = (
-        Index("ix_evidence_tenant_task_item_created", "tenant_id", "task_id", "item_id", "created_at"),
+        Index(
+            "ix_evidence_tenant_task_item_created",
+            "tenant_id",
+            "task_id",
+            "item_id",
+            "created_at",
+        ),
         Index("ix_evidence_tenant_source_type", "tenant_id", "source_type"),
     )
 
