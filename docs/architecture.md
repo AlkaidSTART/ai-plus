@@ -2,8 +2,8 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 版本 | V1.0，2026-09-12，云端模型方案 |
-| 状态 | **已确认的目标设计，尚无可运行实现**；当前工作区未初始化前后端、依赖、数据库、模型接入或 CI |
+| 版本 | V1.1，2026-09-14，部署基座同步 |
+| 状态 | **已有前端脚手架、FastAPI 基础入口与 `infra/` 单机容器基座**；数据库/Redis 应用接入、迁移、Worker、业务 API/SSE、模型接入与 CI 仍未实现 |
 | 需求依据 | 根目录 [PRD.md](../PRD.md) |
 | 决策依据 | [获批 R1 计划](plans/2026-09-12-monorepo-architecture-selection/plan.md) |
 | 文档职责 | 定义 monorepo、选型、模块/运行边界与验证门禁；不代替实施计划或运行测试 |
@@ -19,7 +19,7 @@
 - **P2**：时间切片回测、TikTok/Temu 映射、供应链信号；不同时开工。
 - 证据、租户隔离与真实状态优先于大规模性能优化。云端服务可用性、数据权限、预算、部署区域等须经 M0 验证，不假定账户已开通。
 
-以下目录、组件、接口与测试均为后续实施目标，不是当前已经存在的文件或能力。
+目录树同时展示当前文件和后续目标；未在 README 或对应结果记录中标记落地的组件、接口与测试仍不是当前能力。
 
 ## 2. Monorepo 结构与依赖边界
 
@@ -29,8 +29,7 @@ ai-plus/
 ├── AGENTS.md
 ├── README.md
 ├── frontend/
-│   ├── package.json
-│   ├── bun.lock
+│   ├── package.json                # Vue 3 + Vite + TypeScript；Bun + bun.lock
 │   ├── src/
 │   │   ├── app/                    # 启动、路由、全局 provider
 │   │   ├── features/               # tasks、insights、proposals、evidence
@@ -40,8 +39,11 @@ ai-plus/
 ├── backend/
 │   ├── pyproject.toml
 │   ├── uv.lock
+│   ├── README.md
 │   ├── src/insightx/
-│   │   ├── api/                    # HTTP、认证依赖、DTO、SSE
+│   │   ├── main.py                 # FastAPI 应用工厂与模块级 app
+│   │   ├── api/                    # 当前基础路由；认证、DTO、SSE 待实现
+│   │   ├── crawler/                # 单 URL DOM 爬虫、JSON 与 MongoDB 持久化
 │   │   ├── modules/                # tasks/reviews/analysis/reports
 │   │   ├── workflows/              # LangGraph 图与节点
 │   │   ├── integrations/           # 数据供应方与云端模型 API
@@ -53,7 +55,11 @@ ai-plus/
 ├── contracts/
 │   ├── openapi.json                # 从后端导出的契约快照
 │   └── task-events.schema.json     # 从后端事件 DTO 导出的 schema
-├── compose.yaml                    # Linux 容器联调/部署
+├── infra/                          # 当前单机容器部署基座
+│   ├── compose.yaml                # db/redis/api/web 四服务
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── nginx.conf                  # SPA fallback 与 /api 同域代理
 ├── .github/workflows/              # 前端、后端、契约、集成检查
 └── docs/
     ├── architecture.md
@@ -132,7 +138,7 @@ flowchart LR
     Worker --> AI[云端 LLM 与 P1 VLM API]
 ```
 
-拓扑展示职责，不表示图中组件已经部署。API、Worker、dispatcher 属于同一个模块化后端，而不是三个独立业务服务。
+拓扑展示目标职责，不表示图中组件已经全部部署。当前 Compose 基座只落地 Web、API、DB、Redis 四个容器；API 尚未连接 DB/Redis，Dispatcher、Celery Worker 与 LangGraph 均未部署。API、Worker、dispatcher 属于同一个模块化后端，而不是三个独立业务服务。
 
 ### 4.1 提交、派发与执行
 
@@ -234,8 +240,9 @@ Anthropic 官方说明其不提供自有 Embedding 模型，故独立选择 Embe
 
 ### 8.1 部署目标
 
+- 当前 `infra/compose.yaml` 提供 `db`、`redis`、`api`、`web` 四个单机服务：数据库和 Redis 只在 Compose 网络内访问，API 只在内部暴露 `8000`，Web 通过 Nginx 提供 SPA fallback 并把 `/api/` 代理到 API。`/api/v1/health` 仍返回 `degraded`，因为应用尚未实现数据库和 Redis 探针；四个容器健康不等于业务链路 ready。
 - Docker Compose 的 Linux 容器作为初始联调/部署基线；Celery 官方不支持 Windows 原生，Windows 开发使用 Docker Desktop/WSL2 的 Linux Worker。[S10]
-- API、dispatcher、Worker 使用同版业务包，运行职责分开；前端独立静态构建。数据库和 broker 的存储、权限、备份和恢复另行验证。
+- 目标部署中 API、dispatcher、Worker 使用同版业务包，运行职责分开；前端独立静态构建。数据库和 broker 的存储、权限、备份和恢复另行验证。
 - Compose 的启动顺序不代表 ready，依赖健康检查、迁移完成与应用就绪分别处理；迁移不由每个 API/Worker 实例并发执行。[S9, S19]
 - 先提供结构化日志与 request_id/task_id/item_id、节点耗时、重试和模型用量关联。不默认安装整套可观测平台。
 - 单机 Compose 不提供已验证高可用保证。容器镜像、Redis 等依赖的实际版本、许可证和托管条件在初始化/部署任务中核对。

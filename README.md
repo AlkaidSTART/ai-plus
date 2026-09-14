@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-**当前工作区处于设计文档阶段，尚无可运行的前后端实现。** 以下是已确认的目标设计，不代表目录、依赖、接口、云端模型或部署已经落地。模型/数据来源可用性、质量、费用与性能仍待 M0/M1 验证。
+**当前工作区已落地 Vue 3 + Vite + TypeScript 前端脚手架、FastAPI 基础入口与 `GET /api/v1/health`，以及 `infra/` 下 PostgreSQL/pgvector、Redis、API、Web 四服务单机 Compose 部署基座。** 数据库/Redis 应用接入与真实探针、Alembic/pgvector 初始化迁移、Celery Worker、outbox dispatcher、LangGraph 图与 PostgreSQL checkpointer、业务 API、SSE、契约和 CI 仍未实现；模型/数据来源可用性、质量、费用与性能仍待 M0/M1 验证。健康容器不等同于业务或模型已完成。
 
 **LLM、VLM、Embedding 全部使用云端 API**；项目侧只做编排、清洗、CPU 聚类与存储，不部署模型权重或 GPU/CUDA 推理。LLM/VLM 保留 Claude 云端方向；Embedding 优先验证 SiliconFlow `BAAI/bge-m3`（1024 维基线），实际账户、型号与维度通过验证后锁定。
 
@@ -14,10 +14,14 @@
 
 ```text
 ai-plus/
-├── frontend/         # Vue 应用；Bun + bun.lock（待初始化）
-├── backend/          # API、Celery Worker、LangGraph、outbox 派发器；uv + uv.lock（待初始化）
+├── frontend/         # Vue 3 + Vite + TypeScript；Bun + bun.lock
+├── backend/          # FastAPI 基础入口；uv + uv.lock（任务与工作流待实现）
+├── infra/            # 单机容器部署基座
+│   ├── compose.yaml
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── nginx.conf
 ├── contracts/        # 后端生成的 OpenAPI 与 SSE 事件 schema（待生成）
-├── compose.yaml      # Linux 容器联调/部署（待创建）
 ├── docs/
 │   ├── architecture.md
 │   └── plans/
@@ -48,7 +52,24 @@ ai-plus/
 
 ## 开发与实施
 
-当前没有可执行的项目安装/启动命令。后续先完成 M0 数据/云端模型验证，再按独立计划初始化仓库、契约和一个真实 ASIN 的端到端链路；每次实施遵循“计划 → 确认 → 执行 → 验证 → 结果”。
+当前可执行的基础命令如下；它们只能证明脚手架、基础入口和容器基座可运行，不能证明业务链路已实现。
+
+```bash
+# 前端开发
+cd frontend
+bun install
+bun run dev
+
+# 后端开发
+cd backend
+uv sync
+uv run uvicorn insightx.main:app --reload --port 8000
+
+# 单机容器基座
+docker compose -f infra/compose.yaml up -d --build
+```
+
+当前 `/api/v1/health` 返回 `degraded`，因为数据库与 Redis 探针尚未接入。后续先完成 M0 数据/云端模型验证，再按独立计划补齐契约、迁移、任务链路和一个真实 ASIN 的端到端闭环；每次实施遵循“计划 → 确认 → 执行 → 验证 → 结果”。
 
 目标部署优先采用同域反向代理与服务端会话；Windows 开发使用 Docker Desktop/WSL2 的 Linux Worker，不承诺 Celery 原生 Windows 支持。普通 CI 使用明确标识的 fixture/mock；真实云端调用单独批准并设置预算，不能以 mock 通过宣称模型已接通。
 

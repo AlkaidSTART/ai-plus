@@ -27,7 +27,7 @@ docker compose -f infra/compose.yaml up -d --build
 
 - Web：<http://localhost:8080/>
 - API 健康检查：<http://localhost:8080/api/v1/health>
-- OpenAPI 文档：<http://localhost:8080/docs>
+- OpenAPI 文档：当前未通过 Web 同域代理暴露；本地后端开发时可访问 <http://localhost:8000/docs>。
 
 如需更换宿主端口：
 
