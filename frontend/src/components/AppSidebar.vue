@@ -24,11 +24,11 @@ import {
 
 /** 主导航 = PRD 第四节 5 个模块。 */
 const items = [
-  { to: '/dashboard', title: '战略决策大盘', icon: LayoutDashboard },
-  { to: '/radar', title: '竞品时序监控', icon: Radar },
-  { to: '/voc', title: '多模态评论洞察', icon: MessageSquareText },
-  { to: '/reformulation', title: '工厂级改款决策', icon: Factory },
-  { to: '/financial', title: '逆向财务与风控', icon: ShieldCheck },
+  { to: '/dashboard', title: '决策大盘', icon: LayoutDashboard },
+  { to: '/radar', title: '竞品雷达', icon: Radar },
+  { to: '/voc', title: '评论洞察', icon: MessageSquareText },
+  { to: '/reformulation', title: '改款决策', icon: Factory },
+  { to: '/financial', title: '财务风控', icon: ShieldCheck },
 ]
 
 const route = useRoute()

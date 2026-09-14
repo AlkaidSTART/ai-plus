@@ -31,7 +31,7 @@ const evidenceOpen = ref(false)
   <div class="mx-auto w-full max-w-[1440px] space-y-6 p-4 lg:p-6">
     <div class="flex animate-enter items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">工厂级改款决策</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">改款决策</h1>
         <p class="mt-1 text-sm text-muted-foreground">
           面向工程与供应链的双栏落地清单；每条建议 100% 绑定原始评论证据。
         </p>

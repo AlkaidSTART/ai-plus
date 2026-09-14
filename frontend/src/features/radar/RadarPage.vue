@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 <template>
   <div class="mx-auto w-full max-w-[1440px] space-y-6 p-4 lg:p-6">
     <div class="animate-enter">
-      <h1 class="text-2xl font-semibold tracking-tight">竞品时序监控</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">竞品雷达</h1>
       <p class="mt-1 text-sm text-muted-foreground">
         竞品列表、批次任务状态与异动监控；批次保留每个 ASIN 的独立状态与失败原因。
       </p>

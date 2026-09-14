@@ -20,7 +20,7 @@ import {
 <template>
   <div class="mx-auto w-full max-w-[1440px] space-y-6 p-4 lg:p-6">
     <div class="animate-enter">
-      <h1 class="text-2xl font-semibold tracking-tight">逆向财务与风控熔断</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">财务风控</h1>
       <p class="mt-1 text-sm text-muted-foreground">
         把控商业合理性，防止盲目开模与高危立项。
       </p>
