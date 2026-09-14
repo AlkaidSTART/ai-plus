@@ -31,12 +31,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 async def _run(args: argparse.Namespace, settings: CrawlerSettings) -> int:
-    store = DomSnapshotStore(
-        settings.mongodb_uri,
-        settings.mongodb_database,
-        settings.mongodb_dom_collection,
-    )
+    store: DomSnapshotStore | None = None
     try:
+        store = DomSnapshotStore(
+            settings.mongodb_uri,
+            settings.mongodb_database,
+            settings.mongodb_dom_collection,
+        )
         result = await crawl_url(
             args.url,
             settings=settings,
@@ -46,10 +47,22 @@ async def _run(args: argparse.Namespace, settings: CrawlerSettings) -> int:
             task_item_id=args.task_item_id,
         )
     except Exception as exc:
+        if store is not None:
+            try:
+                await store.close()
+            except Exception as cleanup_exc:
+                print(
+                    f"crawler cleanup failed after crawl failure: {cleanup_exc}",
+                    file=sys.stderr,
+                )
         print(f"crawler failed: {exc}", file=sys.stderr)
         return 1
-    finally:
+
+    try:
         await store.close()
+    except Exception as exc:
+        print(f"crawler cleanup failed: {exc}", file=sys.stderr)
+        return 1
 
     print(
         json.dumps(

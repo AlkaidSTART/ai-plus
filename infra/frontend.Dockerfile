@@ -1,6 +1,10 @@
 # syntax=docker/dockerfile:1.7
 
+FROM node:24-bookworm-slim AS node
+
 FROM oven/bun:1.4.2 AS build
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /app
 

@@ -78,7 +78,7 @@ async def fetch_with_playwright(
         validate_dom_node(dom_value)
 
         title = await page.title()
-        return FetchedPage(
+        fetched = FetchedPage(
             source_url=url,
             final_url=page.url,
             title=title,
@@ -86,10 +86,34 @@ async def fetch_with_playwright(
             captured_at=datetime.now(UTC),
             dom=cast(DomNode, dom_value),
         )
-    finally:
+    except BaseException:
         try:
-            if context is not None:
-                await context.close()
-        finally:
-            if browser is not None:
-                await browser.close()
+            await _close_browser_resources(context, browser)
+        except BaseException:
+            pass
+        raise
+
+    await _close_browser_resources(context, browser)
+    return fetched
+
+
+async def _close_browser_resources(
+    context: BrowserContext | None,
+    browser: Browser | None,
+) -> None:
+    """Close browser resources without masking the first cleanup failure."""
+
+    first_error: BaseException | None = None
+    if context is not None:
+        try:
+            await context.close()
+        except BaseException as exc:
+            first_error = exc
+    if browser is not None:
+        try:
+            await browser.close()
+        except BaseException as exc:
+            if first_error is None:
+                first_error = exc
+    if first_error is not None:
+        raise first_error

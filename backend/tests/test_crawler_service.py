@@ -173,3 +173,43 @@ async def test_crawl_url_propagates_mongodb_failure_after_json_write(
         )
 
     assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+async def test_crawl_url_propagates_json_write_failure_without_mongodb_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fetcher(
+        url: str,
+        *,
+        timeout_ms: int,
+        headless: bool,
+    ) -> FetchedPage:
+        return FetchedPage(
+            source_url=url,
+            final_url=url,
+            title="Example",
+            http_status=200,
+            captured_at=datetime(2026, 9, 14, tzinfo=UTC),
+            dom=sample_dom(),
+        )
+
+    def fail_write(output_dir: Path, snapshot: object) -> Path:
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(
+        "insightx.crawler.service.atomic_write_snapshot",
+        fail_write,
+    )
+    store = RecordingStore()
+    settings = CrawlerSettings(crawler_output_dir=tmp_path)
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        await crawl_url(
+            "https://example.com/start",
+            settings=settings,
+            store=store,  # type: ignore[arg-type]
+            fetcher=fetcher,
+        )
+
+    assert store.calls == []

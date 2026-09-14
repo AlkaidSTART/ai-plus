@@ -111,3 +111,41 @@ async def test_fetch_with_playwright_rejects_invalid_serialized_dom() -> None:
 
     context.close.assert_awaited_once_with()
     browser.close.assert_awaited_once_with()
+
+
+async def test_fetch_preserves_navigation_error_when_cleanup_fails() -> None:
+    playwright, _, browser, context = build_playwright()
+    context.new_page.return_value.goto.side_effect = TimeoutError(
+        "navigation timed out"
+    )
+    context.close.side_effect = RuntimeError("context close failed")
+    browser.close.side_effect = RuntimeError("browser close failed")
+
+    with pytest.raises(TimeoutError, match="navigation timed out"):
+        await fetch_with_playwright(
+            playwright,
+            "https://example.com/start",
+            timeout_ms=1_000,
+            headless=True,
+        )
+
+    context.close.assert_awaited_once_with()
+    browser.close.assert_awaited_once_with()
+
+
+async def test_fetch_propagates_first_cleanup_failure_after_success() -> None:
+    response = MagicMock(status=200)
+    playwright, _, browser, context = build_playwright(response=response)
+    context.close.side_effect = RuntimeError("context close failed")
+    browser.close.side_effect = RuntimeError("browser close failed")
+
+    with pytest.raises(RuntimeError, match="context close failed"):
+        await fetch_with_playwright(
+            playwright,
+            "https://example.com/start",
+            timeout_ms=1_000,
+            headless=True,
+        )
+
+    context.close.assert_awaited_once_with()
+    browser.close.assert_awaited_once_with()

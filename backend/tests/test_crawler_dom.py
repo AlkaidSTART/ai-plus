@@ -114,3 +114,28 @@ def test_atomic_write_snapshot_writes_utf8_json_without_temp_files(
 def test_validate_dom_node_rejects_invalid_contract(node: object) -> None:
     with pytest.raises(ValueError):
         validate_dom_node(node)
+
+
+def test_atomic_write_snapshot_cleans_temp_file_when_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = build_snapshot(
+        snapshot_id="snapshot-replace-failure",
+        source_url="https://example.com/start",
+        final_url="https://example.com/final",
+        title="Example",
+        captured_at=datetime(2026, 9, 14, tzinfo=UTC),
+        http_status=200,
+        dom=sample_dom(),
+    )
+
+    def fail_replace(source: object, target: object) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("insightx.crawler.dom.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        atomic_write_snapshot(tmp_path, snapshot)
+
+    assert list(tmp_path.iterdir()) == []

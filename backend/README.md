@@ -30,7 +30,7 @@ uv run playwright install chromium
 uv run python -m insightx.crawler --url https://example.com
 ```
 
-CLI 会使用 Playwright Chromium 访问目标页面，把渲染后的可见 DOM 递归序列化为 JSON 文件，并将同一快照与采集元数据写入 MongoDB。JSON 默认输出到 `artifacts/dom/`，MongoDB 默认集合为 `dom_snapshots`；`_id` 与返回的 `snapshot_id` 相同。
+CLI 会使用 Playwright Chromium 访问目标页面，把渲染后的 DOM（按固定规则过滤 script/style/noscript/template 与纯空白文本）递归序列化为 JSON 文件，并将同一快照与采集元数据写入 MongoDB。JSON 默认输出到 `artifacts/dom/`，MongoDB 默认集合为 `dom_snapshots`；`_id` 与返回的 `snapshot_id` 相同。
 
 可用参数：
 

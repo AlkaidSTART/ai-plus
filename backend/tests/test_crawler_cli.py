@@ -25,6 +25,17 @@ class FakeStore:
         self.closed = True
 
 
+class CloseFailingStore(FakeStore):
+    async def close(self) -> None:
+        self.closed = True
+        raise RuntimeError("close failed")
+
+
+class ConstructorFailingStore(FakeStore):
+    def __init__(self, uri: str, database: str, collection: str) -> None:
+        raise RuntimeError("store construction failed")
+
+
 def test_parser_requires_url() -> None:
     with pytest.raises(SystemExit):
         cli._build_parser().parse_args([])
@@ -105,3 +116,60 @@ def test_main_returns_nonzero_when_crawl_fails(
     assert status == 1
     assert "crawler failed: storage unavailable" in capsys.readouterr().err
     assert FakeStore.instances[0].closed is True
+
+
+def test_main_returns_nonzero_when_store_construction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "DomSnapshotStore", ConstructorFailingStore)
+
+    status = cli.main(["--url", "https://example.com/start"])
+
+    assert status == 1
+    assert "crawler failed: store construction failed" in capsys.readouterr().err
+
+
+def test_main_returns_nonzero_when_store_close_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def fake_crawl_url(url: str, **kwargs: Any) -> CrawlResult:
+        return CrawlResult(
+            snapshot_id="snapshot-123",
+            json_path=tmp_path / "snapshot-123.json",
+            dom_sha256="a" * 64,
+            final_url=url,
+            http_status=200,
+        )
+
+    FakeStore.instances.clear()
+    monkeypatch.setattr(cli, "DomSnapshotStore", CloseFailingStore)
+    monkeypatch.setattr(cli, "crawl_url", fake_crawl_url)
+
+    status = cli.main(["--url", "https://example.com/start"])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert "crawler cleanup failed: close failed" in captured.err
+
+
+def test_main_preserves_crawl_error_when_store_close_also_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def failing_crawl_url(url: str, **kwargs: Any) -> CrawlResult:
+        raise RuntimeError("crawl failed")
+
+    FakeStore.instances.clear()
+    monkeypatch.setattr(cli, "DomSnapshotStore", CloseFailingStore)
+    monkeypatch.setattr(cli, "crawl_url", failing_crawl_url)
+
+    status = cli.main(["--url", "https://example.com/start"])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "crawler failed: crawl failed" in captured.err
+    assert "crawler cleanup failed after crawl failure: close failed" in captured.err

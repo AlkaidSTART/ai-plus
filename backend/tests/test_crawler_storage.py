@@ -93,15 +93,35 @@ async def test_save_snapshot_creates_indexes_and_inserts_contract(
         False,
         False,
     ]
+    assert [list(index.document["key"].items()) for index in indexes] == [
+        [("source_url", 1), ("captured_at", -1)],
+        [("dom_sha256", 1)],
+        [
+            ("tenant_id", 1),
+            ("task_id", 1),
+            ("task_item_id", 1),
+            ("captured_at", -1),
+        ],
+    ]
 
+    snapshot = sample_snapshot()
     document: dict[str, Any] = collection.insert_one.await_args.args[0]
-    assert document["_id"] == "snapshot-123"
-    assert document["captured_at"] == datetime(2026, 9, 14, 12, 30, tzinfo=UTC)
-    assert document["json_path"] == str((tmp_path / "snapshot-123.json").resolve())
-    assert document["crawler"] == {"engine": "playwright", "browser": "chromium"}
-    assert document["tenant_id"] == "tenant-1"
-    assert document["task_id"] == "task-1"
-    assert document["task_item_id"] == "item-1"
+    assert document == {
+        "_id": snapshot["snapshot_id"],
+        "source_url": snapshot["source_url"],
+        "final_url": snapshot["final_url"],
+        "title": snapshot["title"],
+        "captured_at": datetime(2026, 9, 14, 12, 30, tzinfo=UTC),
+        "http_status": snapshot["http_status"],
+        "dom_format_version": snapshot["format_version"],
+        "dom_sha256": snapshot["dom_sha256"],
+        "dom": snapshot["dom"],
+        "json_path": str((tmp_path / "snapshot-123.json").resolve()),
+        "crawler": {"engine": "playwright", "browser": "chromium"},
+        "tenant_id": "tenant-1",
+        "task_id": "task-1",
+        "task_item_id": "item-1",
+    }
 
 
 async def test_save_snapshot_omits_optional_scope_fields(tmp_path: Path) -> None:
@@ -143,3 +163,26 @@ async def test_indexes_and_close_are_idempotent(tmp_path: Path) -> None:
 
     collection.create_indexes.assert_awaited_once()
     client.close.assert_awaited_once_with()
+
+
+async def test_save_snapshot_propagates_insert_failure(tmp_path: Path) -> None:
+    collection = FakeCollection()
+    collection.insert_one.side_effect = RuntimeError("insert unavailable")
+    client = FakeClient(FakeDatabase(collection))
+    store = DomSnapshotStore(
+        "mongodb://example",
+        "insightx",
+        "dom_snapshots",
+        client=client,  # type: ignore[arg-type]
+    )
+
+    try:
+        await store.save_snapshot(
+            snapshot=sample_snapshot(),
+            captured_at=datetime(2026, 9, 14, tzinfo=UTC),
+            json_path=tmp_path / "snapshot-123.json",
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "insert unavailable"
+    else:
+        raise AssertionError("insert failure should propagate")
