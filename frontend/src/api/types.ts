@@ -281,3 +281,79 @@ export interface FinancialRuleInfo {
   rules: FinancialRuleItem[]
 }
 
+export interface BsrHistoryPoint {
+  timestamp: string
+  bsr: number
+  sub_bsr?: number | null
+  price: number
+  buy_box: boolean
+}
+
+export interface CompetitorBsrItem {
+  asin: string
+  title: string
+  category: string
+  subcategory?: string | null
+  current_bsr: number
+  current_sub_bsr?: number | null
+  bsr_change_7d: number
+  current_price: number
+  currency: string
+  buy_box_ratio: number
+  buy_box_winner: string
+  rating: number
+  review_count: number
+  history: BsrHistoryPoint[]
+}
+
+export interface BsrTrendsResponse {
+  items: CompetitorBsrItem[]
+  updated_at: string
+}
+
+export type CrossPlatformChannel = 'TIKTOK' | 'TEMU'
+export type CrossPlatformMatchStatus = 'MATCHED' | 'PENDING' | 'VARIANT'
+
+export interface CrossPlatformItem {
+  id: string
+  target_asin: string
+  target_title: string
+  target_price: number
+  platform: CrossPlatformChannel
+  platform_sku: string
+  platform_title: string
+  platform_url: string
+  platform_price: number
+  estimated_fees: number
+  estimated_spread: number
+  match_score: number
+  match_status: CrossPlatformMatchStatus
+  monthly_sales: number
+  updated_at: string
+}
+
+export interface CrossPlatformMetrics {
+  total_skus: number
+  avg_match_score: number
+  max_spread: number
+  arbitrage_opportunities: number
+}
+
+export interface CrossPlatformResponse {
+  metrics: CrossPlatformMetrics
+  items: CrossPlatformItem[]
+}
+
+export interface ListBsrTrendsParams {
+  task_id?: string
+  asin?: string
+  days?: number
+}
+
+export interface ListCrossPlatformParams {
+  asin?: string
+  platform?: string
+  status?: string
+}
+
+

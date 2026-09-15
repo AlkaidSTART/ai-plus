@@ -3,11 +3,15 @@
  * Vite forwards `/api` to the backend in development.
  */
 import type {
+  BsrTrendsResponse,
+  CrossPlatformResponse,
   EvidenceResponse,
   FinancialEvaluateRequest,
   FinancialEvaluateResponse,
   FinancialRuleInfo,
   HealthResponse,
+  ListBsrTrendsParams,
+  ListCrossPlatformParams,
   ListEvidenceParams,
   ListTasksParams,
   Page,
@@ -248,5 +252,28 @@ export async function exportTask(taskId: string, signal?: AbortSignal): Promise<
   }
   return res.blob()
 }
+
+export function getBsrTrends(params: ListBsrTrendsParams = {}, signal?: AbortSignal) {
+  return request<BsrTrendsResponse>(
+    withQuery('/api/v1/radar/bsr-trends', {
+      task_id: params.task_id,
+      asin: params.asin,
+      days: params.days,
+    }),
+    { signal },
+  )
+}
+
+export function getCrossPlatform(params: ListCrossPlatformParams = {}, signal?: AbortSignal) {
+  return request<CrossPlatformResponse>(
+    withQuery('/api/v1/radar/cross-platform', {
+      asin: params.asin,
+      platform: params.platform,
+      status: params.status,
+    }),
+    { signal },
+  )
+}
+
 
 

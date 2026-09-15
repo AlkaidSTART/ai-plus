@@ -12,6 +12,7 @@ from typing import cast
 from playwright.async_api import (
     Browser,
     BrowserContext,
+    Page,
     Playwright,
     async_playwright,
 )
@@ -43,6 +44,64 @@ _VIEWPORTS = [
 _DEFAULT_MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 2.0  # seconds, exponential backoff
 
+# ponytail: stealth — upgrade to playwright-stealth or browser-profile
+#   rotation when Amazon starts detecting the init_script approach.
+_STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+window.chrome = {runtime: {}};
+"""
+
+# JS snippet to scroll the Amazon review section into view and wait for
+# lazy-loaded review cards to appear.  Returns the count of reviews found
+# (0 means none loaded even after scrolling).
+_SCROLL_TO_REVIEWS_SCRIPT = """
+async () => {
+    // Try to find the reviews widget and scroll to it
+    const selectors = [
+        '#cm-cr-dp-review-list',
+        '[data-hook="reviews-medley-widget"]',
+        '#reviewsMedley',
+        '#customer-reviews-content',
+    ];
+    let target = null;
+    for (const sel of selectors) {
+        target = document.querySelector(sel);
+        if (target) break;
+    }
+    if (target) {
+        target.scrollIntoView({behavior: 'instant', block: 'center'});
+    } else {
+        // No review container found — scroll to bottom to trigger any
+        // lazy-load and then back up.
+        window.scrollTo(0, document.body.scrollHeight * 0.75);
+    }
+
+    // Wait up to 5s for at least one review card to appear
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+        const count = document.querySelectorAll('[data-hook="review"]').length;
+        if (count > 0) return count;
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    // Second attempt: click "See more reviews" link if present
+    const seeMore = document.querySelector(
+        '[data-hook="see-all-reviews-link-foot"], '
+      + 'a[href*="product-reviews"], '
+      + '.cr-widget-FocalReviews a.a-link-emphasis'
+    );
+    // Don't navigate — just trigger the lazy loader by scrolling again
+    if (seeMore) {
+        seeMore.scrollIntoView({behavior: 'instant', block: 'center'});
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    return document.querySelectorAll('[data-hook="review"]').length;
+}
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class FetchedPage:
@@ -66,7 +125,7 @@ async def fetch_dom(
     """Open one URL with Chromium and capture its rendered DOM.
 
     Retries transient failures (connection reset, timeout) with exponential
-    backoff and jitter. Each attempt uses a fresh browser instance with
+    backoff and jitter.  Each attempt uses a fresh browser instance with
     randomised fingerprint to reduce bot-detection risk.
     """
 
@@ -104,6 +163,41 @@ async def fetch_dom(
     raise last_error  # type: ignore[misc]
 
 
+async def _create_stealth_context(
+    browser: Browser,
+) -> BrowserContext:
+    """Create a browser context with randomised fingerprint and stealth patches."""
+
+    ua = random.choice(_USER_AGENTS)
+    viewport = random.choice(_VIEWPORTS)
+    context = await browser.new_context(
+        user_agent=ua,
+        viewport=viewport,
+        locale="en-US",
+        timezone_id="America/New_York",
+        java_script_enabled=True,
+        extra_http_headers={
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Upgrade-Insecure-Requests": "1",
+        },
+    )
+    await context.add_init_script(_STEALTH_INIT_SCRIPT)
+    return context
+
+
+async def _scroll_for_reviews(page: Page) -> int:
+    """Scroll to the review section and return how many review cards loaded."""
+
+    try:
+        count = await page.evaluate(_SCROLL_TO_REVIEWS_SCRIPT)
+        return int(count) if isinstance(count, (int, float)) else 0
+    except Exception:
+        logger.debug("Review-scroll script raised; continuing with current DOM")
+        return 0
+
+
 async def fetch_with_playwright(
     playwright: Playwright,
     url: str,
@@ -119,38 +213,16 @@ async def fetch_with_playwright(
         launch_args = [
             "--disable-blink-features=AutomationControlled",
             "--disable-features=IsolateOrigins,site-per-process",
+            "--no-first-run",
+            "--no-default-browser-check",
         ]
         browser = await playwright.chromium.launch(
             headless=headless,
             args=launch_args,
         )
-        ua = random.choice(_USER_AGENTS)
-        viewport = random.choice(_VIEWPORTS)
-        context = await browser.new_context(
-            user_agent=ua,
-            viewport=viewport,
-            locale="en-US",
-            timezone_id="America/New_York",
-            java_script_enabled=True,
-            extra_http_headers={
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Upgrade-Insecure-Requests": "1",
-            },
-        )
-
-        # Remove navigator.webdriver flag that exposes automation
-        await context.add_init_script(
-            """
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-            Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-            window.chrome = {runtime: {}};
-            """
-        )
-
+        context = await _create_stealth_context(browser)
         page = await context.new_page()
+
         response = await page.goto(
             url,
             wait_until="domcontentloaded",
@@ -159,8 +231,20 @@ async def fetch_with_playwright(
         if response is None:
             raise RuntimeError(f"navigation returned no response for {url}")
 
-        # Brief random pause to let lazy-loaded content settle
-        await page.wait_for_timeout(random.randint(1500, 3000))
+        # Wait for full network idle — catches XHR-loaded review widgets
+        try:
+            await page.wait_for_load_state("networkidle", timeout=10_000)
+        except Exception:
+            pass  # best-effort; proceed with what we have
+
+        # Scroll to review section and wait for lazy-loaded cards
+        review_count = await _scroll_for_reviews(page)
+        logger.info(
+            "Scrolled to reviews for %s — found %d review card(s)", url, review_count
+        )
+
+        # Brief random pause for any remaining rendering
+        await page.wait_for_timeout(random.randint(800, 1500))
 
         dom_value = await page.evaluate(DOM_SERIALIZER_SCRIPT)
         if not isinstance(dom_value, dict):

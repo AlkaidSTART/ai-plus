@@ -26,9 +26,13 @@ def build_playwright(
     page = MagicMock()
     page.url = "https://example.com/final"
     page.goto = AsyncMock(return_value=response)
-    page.evaluate = AsyncMock(return_value=sample_dom() if dom is None else dom)
+    # evaluate is called twice: first for review-scroll (returns int),
+    # then for DOM serialization (returns the dom dict).
+    dom_result = sample_dom() if dom is None else dom
+    page.evaluate = AsyncMock(side_effect=[0, dom_result])
     page.title = AsyncMock(return_value="Captured page")
     page.wait_for_timeout = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
 
     context = MagicMock()
     context.new_page = AsyncMock(return_value=page)
@@ -67,9 +71,7 @@ async def test_fetch_with_playwright_captures_rendered_values_and_closes() -> No
         wait_until="domcontentloaded",
         timeout=12_345,
     )
-    context.new_page.return_value.evaluate.assert_awaited_once_with(
-        DOM_SERIALIZER_SCRIPT
-    )
+    assert context.new_page.return_value.evaluate.await_count == 2
     context.new_page.return_value.title.assert_awaited_once_with()
     assert fetched.source_url == "https://example.com/start"
     assert fetched.final_url == "https://example.com/final"
