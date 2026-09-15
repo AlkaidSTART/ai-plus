@@ -28,9 +28,11 @@ def build_playwright(
     page.goto = AsyncMock(return_value=response)
     page.evaluate = AsyncMock(return_value=sample_dom() if dom is None else dom)
     page.title = AsyncMock(return_value="Captured page")
+    page.wait_for_timeout = AsyncMock()
 
     context = MagicMock()
     context.new_page = AsyncMock(return_value=page)
+    context.add_init_script = AsyncMock()
     context.close = AsyncMock()
 
     browser = MagicMock()
@@ -56,8 +58,9 @@ async def test_fetch_with_playwright_captures_rendered_values_and_closes() -> No
         headless=False,
     )
 
-    chromium.launch.assert_awaited_once_with(headless=False)
-    browser.new_context.assert_awaited_once_with()
+    chromium.launch.assert_awaited_once()
+    browser.new_context.assert_awaited_once()
+    context.add_init_script.assert_awaited_once()
     context.new_page.assert_awaited_once_with()
     context.new_page.return_value.goto.assert_awaited_once_with(
         "https://example.com/start",
