@@ -24,6 +24,8 @@ dependencies = [
     "anthropic>=1.5.0",
     "playwright>=1.62.0,<2",
     "pymongo>=4.18.1,<5",
+    "python-docx>=1.2.0",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
