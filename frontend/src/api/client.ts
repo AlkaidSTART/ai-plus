@@ -231,3 +231,22 @@ export function evaluateTaskItemFinancial(
   )
 }
 
+export async function exportTask(taskId: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await fetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/export`, { signal })
+  if (!res.ok) {
+    const text = await res.text()
+    let message = '导出工程任务书失败'
+    try {
+      const body = JSON.parse(text)
+      if (body?.error?.message) {
+        message = body.error.message
+      }
+    } catch {
+      // fallback
+    }
+    throw new ApiError(res.status, 'EXPORT_FAILED', message)
+  }
+  return res.blob()
+}
+
+

@@ -119,7 +119,8 @@ def test_financial_evaluate_long_payback_period_triggers_veto():
         unit_product_cost=15.0,
         expected_sales_price=25.0,
         shipping_cost_per_unit=5.0,
-        monthly_estimated_sales=100,  # unit margin = 5, monthly = 500, payback = 13000 / 500 = 26 months > 6
+        # unit margin = 5, monthly = 500, payback = 26 months > 6
+        monthly_estimated_sales=100,
         target_payback_months=6,
         category_half_life_months=12,
     )

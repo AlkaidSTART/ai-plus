@@ -14,8 +14,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     parser = argparse.ArgumentParser(description="InsightX background task worker")
-    parser.add_argument("--once", action="store_true", help="Process one pending batch and exit")
-    parser.add_argument("--poll-interval", type=float, default=1.0, help="Polling interval in seconds")
+    parser.add_argument(
+        "--once", action="store_true", help="Process one pending batch and exit"
+    )
+    parser.add_argument(
+        "--poll-interval", type=float, default=1.0, help="Polling interval in seconds"
+    )
     args = parser.parse_args()
 
     settings = get_settings()

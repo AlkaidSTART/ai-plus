@@ -4,8 +4,6 @@ import {
   AlertTriangle,
   Calculator,
   CheckCircle2,
-  Clock,
-  Coins,
   FileCheck2,
   HelpCircle,
   Percent,
@@ -15,7 +13,6 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  XCircle,
 } from '@lucide/vue'
 import EmptyState from '@/components/EmptyState.vue'
 import FinancialStateBadge from '@/components/FinancialStateBadge.vue'
@@ -83,16 +80,16 @@ const saveMutation = useSaveTaskItemFinancial()
 
 // 表单响应式参数
 const form = reactive<{
-  mold_cost: number | null
-  sample_cost: number | null
-  moq: number | null
-  unit_product_cost: number | null
-  expected_sales_price: number | null
-  shipping_cost_per_unit: number | null
-  monthly_estimated_sales: number | null
+  mold_cost?: number
+  sample_cost?: number
+  moq?: number
+  unit_product_cost?: number
+  expected_sales_price?: number
+  shipping_cost_per_unit?: number
+  monthly_estimated_sales?: number
   target_payback_months: number
   category_half_life_months: number
-  max_cash_budget: number | null
+  max_cash_budget?: number
 }>({
   mold_cost: 6000,
   sample_cost: 600,
@@ -156,16 +153,16 @@ function applyVetoMarginPreset() {
 }
 
 function resetToNotEvaluated() {
-  form.mold_cost = null
-  form.sample_cost = null
-  form.moq = null
-  form.unit_product_cost = null
-  form.expected_sales_price = null
-  form.shipping_cost_per_unit = null
-  form.monthly_estimated_sales = null
+  form.mold_cost = undefined
+  form.sample_cost = undefined
+  form.moq = undefined
+  form.unit_product_cost = undefined
+  form.expected_sales_price = undefined
+  form.shipping_cost_per_unit = undefined
+  form.monthly_estimated_sales = undefined
   form.target_payback_months = 6
   form.category_half_life_months = 12
-  form.max_cash_budget = null
+  form.max_cash_budget = undefined
   void runEvaluation()
 }
 
@@ -508,38 +505,29 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
       :style="{ animationDelay: '120ms' }"
     >
       <KpiCard
-        title="预估静态回本周期"
+        label="预估静态回本周期"
         :value="`${evalResult.metrics.payback_months} 个月`"
-        :subtitle="`期望上限 ≤ ${form.target_payback_months} 个月`"
-        :icon="Clock"
-        :tone="evalResult.metrics.payback_months <= form.target_payback_months ? 'emerald' : 'red'"
+        :note="`期望上限 ≤ ${form.target_payback_months} 个月`"
       />
       <KpiCard
-        title="单件边际贡献 / 毛利"
+        label="单件边际贡献 / 毛利"
         :value="`$${evalResult.metrics.unit_contribution_margin.toFixed(2)}`"
-        :subtitle="`毛利率 ${evalResult.metrics.gross_margin_rate}%`"
-        :icon="Coins"
-        :tone="evalResult.metrics.unit_contribution_margin > 0 ? 'emerald' : 'red'"
+        :note="`毛利率 ${evalResult.metrics.gross_margin_rate}%`"
       />
       <KpiCard
-        title="首批启动资金需求"
+        label="首批启动资金需求"
         :value="`$${evalResult.metrics.initial_batch_cash.toLocaleString('en-US')}`"
-        :subtitle="`固定投入 $${evalResult.metrics.fixed_costs.toLocaleString('en-US')}`"
-        :icon="TrendingUp"
+        :note="`固定投入 $${evalResult.metrics.fixed_costs.toLocaleString('en-US')}`"
       />
       <KpiCard
-        title="单件模具分摊比率"
+        label="单件模具分摊比率"
         :value="`${evalResult.metrics.mold_cost_ratio}%`"
-        :subtitle="`单件分摊 $${evalResult.metrics.amortized_mold_cost_per_unit.toFixed(2)} (红线 35%)`"
-        :icon="Percent"
-        :tone="evalResult.metrics.mold_cost_ratio <= 35.0 ? 'emerald' : 'red'"
+        :note="`单件分摊 $${evalResult.metrics.amortized_mold_cost_per_unit.toFixed(2)} (红线 35%)`"
       />
       <KpiCard
-        title="12个月预估 ROI"
+        label="12个月预估 ROI"
         :value="`${evalResult.metrics.estimated_12m_roi}%`"
-        :subtitle="`月度净贡献 $${evalResult.metrics.monthly_contribution.toLocaleString('en-US')}`"
-        :icon="Calculator"
-        :tone="evalResult.metrics.estimated_12m_roi > 0 ? 'emerald' : 'red'"
+        :note="`月度净贡献 $${evalResult.metrics.monthly_contribution.toLocaleString('en-US')}`"
       />
     </div>
 
@@ -567,7 +555,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="mold_cost" class="font-medium">开模预算 (USD)</Label>
               <span class="text-muted-foreground font-mono">
-                ${{ form.mold_cost !== null ? form.mold_cost.toLocaleString('en-US') : '未设置' }}
+                ${{ form.mold_cost !== undefined ? form.mold_cost.toLocaleString('en-US') : '未设置' }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -596,7 +584,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="sample_cost" class="font-medium">打样及手板成本 (USD)</Label>
               <span class="text-muted-foreground font-mono">
-                ${{ form.sample_cost !== null ? form.sample_cost.toLocaleString('en-US') : '未设置' }}
+                ${{ form.sample_cost !== undefined ? form.sample_cost.toLocaleString('en-US') : '未设置' }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -624,7 +612,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="moq" class="font-medium">首批最小起订量 (MOQ, 件)</Label>
               <span class="text-muted-foreground font-mono">
-                {{ form.moq !== null ? form.moq.toLocaleString('en-US') : '未设置' }} 件
+                {{ form.moq !== undefined ? form.moq.toLocaleString('en-US') : '未设置' }} 件
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -652,7 +640,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="unit_product_cost" class="font-medium">单件生产/采购成本 (USD)</Label>
               <span class="text-muted-foreground font-mono">
-                ${{ form.unit_product_cost !== null ? form.unit_product_cost.toFixed(2) : '未设置' }}
+                ${{ form.unit_product_cost !== undefined ? form.unit_product_cost.toFixed(2) : '未设置' }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -681,7 +669,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="expected_sales_price" class="font-medium">预期零售价格 (USD)</Label>
               <span class="text-muted-foreground font-mono">
-                ${{ form.expected_sales_price !== null ? form.expected_sales_price.toFixed(2) : '未设置' }}
+                ${{ form.expected_sales_price !== undefined ? form.expected_sales_price.toFixed(2) : '未设置' }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -710,7 +698,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="shipping_cost" class="font-medium">单件海运与履约运费 (USD)</Label>
               <span class="text-muted-foreground font-mono">
-                ${{ form.shipping_cost_per_unit !== null ? form.shipping_cost_per_unit.toFixed(2) : '未设置' }}
+                ${{ form.shipping_cost_per_unit !== undefined ? form.shipping_cost_per_unit.toFixed(2) : '未设置' }}
               </span>
             </div>
             <div class="flex items-center gap-3">
@@ -739,7 +727,7 @@ const chartOption = computed<EChartsCoreOption | null>(() => {
             <div class="flex items-center justify-between text-xs">
               <Label for="monthly_sales" class="font-medium">月度预估销量 (件/月)</Label>
               <span class="text-muted-foreground font-mono">
-                {{ form.monthly_estimated_sales !== null ? form.monthly_estimated_sales : '未设置' }} 件
+                {{ form.monthly_estimated_sales !== undefined ? form.monthly_estimated_sales : '未设置' }} 件
               </span>
             </div>
             <div class="flex items-center gap-3">

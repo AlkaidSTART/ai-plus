@@ -10,4 +10,3 @@ api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(tasks_router)
 api_router.include_router(financial_router)
-

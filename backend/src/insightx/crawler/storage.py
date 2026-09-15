@@ -24,9 +24,9 @@ class DomSnapshotStore:
         client: AsyncMongoClient[dict[str, Any]] | None = None,
     ) -> None:
         self._client = client or AsyncMongoClient(uri)
-        self._collection: AsyncCollection[dict[str, Any]] = (
-            self._client.get_database(database).get_collection(collection)
-        )
+        self._collection: AsyncCollection[dict[str, Any]] = self._client.get_database(
+            database
+        ).get_collection(collection)
         self._indexes_ready = False
         self._closed = False
 

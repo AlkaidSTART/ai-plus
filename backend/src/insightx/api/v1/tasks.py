@@ -273,4 +273,3 @@ def evaluate_item_financial(
         tenant_id=tenant_id,
     )
     return SuccessEnvelope(data=result)
-

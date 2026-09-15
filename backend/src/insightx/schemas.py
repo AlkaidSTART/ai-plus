@@ -243,9 +243,7 @@ class ReportProposal(StrictModel):
     """Evidence-backed recommendation in a generated report."""
 
     proposal_id: str
-    column: Literal[
-        "PRODUCT_OPTIMIZATION", "PACKAGING_FULFILLMENT_OPTIMIZATION"
-    ]
+    column: Literal["PRODUCT_OPTIMIZATION", "PACKAGING_FULFILLMENT_OPTIMIZATION"]
     title: str
     change_description: str
     pain_point_ids: list[str] = Field(min_length=1)
@@ -390,18 +388,17 @@ class FinancialRuleInfo(StrictModel):
     rules: list[FinancialRuleItem]
 
 
-
 T = TypeVar("T")
 
 
-class Page(StrictModel, Generic[T]):
+class Page[T](StrictModel):
     """Cursor-paginated result."""
 
     items: list[T]
     next_cursor: str | None
 
 
-class SuccessEnvelope(StrictModel, Generic[T]):
+class SuccessEnvelope[T](StrictModel):
     """Standard successful API envelope."""
 
     code: Literal[0] = 0

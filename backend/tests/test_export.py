@@ -7,9 +7,9 @@ import zipfile
 from datetime import UTC, datetime
 from typing import Any
 
-from docx import Document
 import openpyxl  # type: ignore[import-untyped]
 import pytest
+from docx import Document
 from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
@@ -48,7 +48,9 @@ def sqlite_session_factory():
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def _seed_completed_task(session_factory: sessionmaker[Session]) -> tuple[str, str, str]:
+def _seed_completed_task(
+    session_factory: sessionmaker[Session],
+) -> tuple[str, str, str]:
     task_id = "tsk_export_test"
     item1_id = "itm_export_1"
     item2_id = "itm_export_2"
@@ -139,7 +141,7 @@ def _seed_completed_task(session_factory: sessionmaker[Session]) -> tuple[str, s
                         "proposal_id": "prop_01",
                         "column": "PRODUCT_OPTIMIZATION",
                         "title": "加厚卡扣模具壁厚",
-                        "change_description": "将卡扣受力部位壁厚由1.2mm增加至1.8mm",
+                        "change_description": "将卡扣受力部位壁厚增加至1.8mm",
                         "pain_point_ids": ["pain_01"],
                         "snapshot_ref": "snap_01",
                         "evidence_refs": ["rev_01"],
@@ -148,7 +150,7 @@ def _seed_completed_task(session_factory: sessionmaker[Session]) -> tuple[str, s
                         "proposal_id": "prop_02",
                         "column": "PACKAGING_FULFILLMENT_OPTIMIZATION",
                         "title": "加入高密度EPE防震珍珠棉",
-                        "change_description": "包装四周增加15mm防震保护，防止跌落冲击",
+                        "change_description": "包装四周增加15mm防震保护",
                         "pain_point_ids": ["pain_01"],
                         "snapshot_ref": "snap_02",
                         "evidence_refs": ["rev_01"],
@@ -186,7 +188,9 @@ def _seed_completed_task(session_factory: sessionmaker[Session]) -> tuple[str, s
 def test_export_task_charter_not_found(sqlite_session_factory):
     with sqlite_session_factory() as session:
         with pytest.raises(ApiError) as exc_info:
-            export_task_charter_zip(session, tenant_id="dev-tenant", task_id="non_existent")
+            export_task_charter_zip(
+                session, tenant_id="dev-tenant", task_id="non_existent"
+            )
         assert exc_info.value.status_code == 404
         assert exc_info.value.code == "TASK_NOT_FOUND"
 
@@ -206,7 +210,9 @@ def test_export_task_charter_running_raises_409(sqlite_session_factory):
         session.commit()
 
         with pytest.raises(ApiError) as exc_info:
-            export_task_charter_zip(session, tenant_id="dev-tenant", task_id="tsk_running")
+            export_task_charter_zip(
+                session, tenant_id="dev-tenant", task_id="tsk_running"
+            )
         assert exc_info.value.status_code == 409
         assert exc_info.value.code == "TASK_NOT_READY"
 
@@ -288,4 +294,3 @@ async def test_export_endpoint_returns_zip(sqlite_session_factory):
         assert len(resp.content) > 0
         with zipfile.ZipFile(io.BytesIO(resp.content), "r") as zf:
             assert "工程任务书_建议.docx" in zf.namelist()
-

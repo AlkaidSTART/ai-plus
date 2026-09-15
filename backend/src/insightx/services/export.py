@@ -7,11 +7,17 @@ import zipfile
 from datetime import UTC, datetime
 from typing import Any
 
+import openpyxl  # type: ignore[import-untyped]
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.shared import Inches, Pt, RGBColor
-import openpyxl  # type: ignore[import-untyped]
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # type: ignore[import-untyped]
+from docx.shared import Pt, RGBColor
+from openpyxl.styles import (  # type: ignore[import-untyped]
+    Alignment,
+    Border,
+    Font,
+    PatternFill,
+    Side,
+)
 from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,7 +28,7 @@ from insightx.schemas import TaskStatus
 
 
 def _str_width(value: Any) -> int:
-    """Calculate approximate character display width for auto-sizing columns."""
+    """Calculate approximate character display width for auto-sizing."""
     text = str(value if value is not None else "")
     return sum(2 if ord(char) > 127 else 1 for char in text)
 
@@ -33,12 +39,14 @@ def _build_product_xlsx(
     report: Report | None,
     evidences: list[Evidence],
 ) -> bytes:
-    """Generate product spreadsheet containing overview, proposals, pain points, and evidence."""
-    # ponytail: fixed-schema openpyxl tables; upgrade to dynamic report schemas if new data types added
+    """Generate product spreadsheet with overview, proposals, and evidence."""
+    # ponytail: fixed-schema tables; upgrade if dynamic schemas required
     wb = openpyxl.Workbook()
 
     header_font = Font(name="Microsoft YaHei", size=10, bold=True, color="1E293B")
-    header_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="F1F5F9", end_color="F1F5F9", fill_type="solid"
+    )
     cell_font = Font(name="Microsoft YaHei", size=9)
     thin_border = Border(
         left=Side(style="thin", color="E2E8F0"),
@@ -78,19 +86,20 @@ def _build_product_xlsx(
     excluded_count = sample_metrics.get("excluded_review_count", 0)
     avg_rating = sample_metrics.get("average_rating")
     neg_ratio = sample_metrics.get("negative_review_ratio")
-    neg_ratio_str = f"{neg_ratio * 100:.1f}%" if neg_ratio is not None else "暂无"
+    neg_str = f"{neg_ratio * 100:.1f}%" if neg_ratio is not None else "暂无"
     methodology = sample_metrics.get("methodology", "暂无")
+    dq = report.data_quality if report else (item.data_quality or "未评估")
 
     meta_rows = [
         ("任务编号", task.task_id),
         ("产品 ASIN", item.asin),
-        ("数据质量", report.data_quality if report else (item.data_quality or "未评估")),
+        ("数据质量", dq),
         ("财务评估状态", report.financial_state if report else "NOT_EVALUATED"),
         ("原始评论总数", raw_count),
         ("有效评论数", valid_count),
         ("过滤评论数", excluded_count),
-        ("平均星级评分", f"{avg_rating:.2f}" if avg_rating is not None else "暂无"),
-        ("负面评论占比", neg_ratio_str),
+        ("平均星级评分", f"{avg_rating:.2f}" if avg_rating else "暂无"),
+        ("负面评论占比", neg_str),
         ("提炼痛点总数", len(report.pain_points) if report else 0),
         ("落地改款建议数", len(report.proposals) if report else 0),
         ("分析口径与方法", methodology),
@@ -123,17 +132,19 @@ def _build_product_xlsx(
             if prop.get("column") == "PRODUCT_OPTIMIZATION"
             else "包装与履约优化"
         )
-        ws_prop.append([
-            prop.get("proposal_id", ""),
-            col_type,
-            prop.get("title", ""),
-            prop.get("change_description", ""),
-            ", ".join(prop.get("pain_point_ids", [])),
-            ", ".join(prop.get("evidence_refs", [])),
-            "未评估",
-            "未评估",
-            "未评估",
-        ])
+        ws_prop.append(
+            [
+                prop.get("proposal_id", ""),
+                col_type,
+                prop.get("title", ""),
+                prop.get("change_description", ""),
+                ", ".join(prop.get("pain_point_ids", [])),
+                ", ".join(prop.get("evidence_refs", [])),
+                "未评估",
+                "未评估",
+                "未评估",
+            ]
+        )
     auto_fit_columns(ws_prop)
 
     # 3. Sheet: 用户痛点
@@ -154,17 +165,19 @@ def _build_product_xlsx(
 
     pain_points = report.pain_points if report else []
     for p in pain_points:
-        ws_pain.append([
-            p.get("pain_point_id", ""),
-            p.get("label", ""),
-            p.get("severity_level", ""),
-            p.get("severity_score", ""),
-            p.get("severity_rationale", ""),
-            p.get("actual_frequency", 0),
-            p.get("frequency_methodology", ""),
-            p.get("summary", ""),
-            ", ".join(p.get("evidence_refs", [])),
-        ])
+        ws_pain.append(
+            [
+                p.get("pain_point_id", ""),
+                p.get("label", ""),
+                p.get("severity_level", ""),
+                p.get("severity_score", ""),
+                p.get("severity_rationale", ""),
+                p.get("actual_frequency", 0),
+                p.get("frequency_methodology", ""),
+                p.get("summary", ""),
+                ", ".join(p.get("evidence_refs", [])),
+            ]
+        )
     auto_fit_columns(ws_pain)
 
     # 4. Sheet: 原始证据链
@@ -182,21 +195,22 @@ def _build_product_xlsx(
     style_headers(ws_evi, len(evi_headers))
 
     for ev in evidences:
-        rating = ev.source_metadata.get("rating") if ev.source_metadata else None
+        meta = ev.source_metadata if isinstance(ev.source_metadata, dict) else {}
+        rating = meta.get("rating")
         pub_time = (
-            ev.published_at.strftime("%Y-%m-%d %H:%M:%S")
-            if ev.published_at
-            else ""
+            ev.published_at.strftime("%Y-%m-%d %H:%M:%S") if ev.published_at else ""
         )
-        ws_evi.append([
-            ev.evidence_id,
-            ev.source_ref,
-            rating if rating is not None else "暂无",
-            ev.excerpt,
-            ev.source_type,
-            ev.source_url or "",
-            pub_time,
-        ])
+        ws_evi.append(
+            [
+                ev.evidence_id,
+                ev.source_ref,
+                rating if rating is not None else "暂无",
+                ev.excerpt,
+                ev.source_type,
+                ev.source_url or "",
+                pub_time,
+            ]
+        )
     auto_fit_columns(ws_evi)
 
     out = io.BytesIO()
@@ -228,10 +242,16 @@ def _build_proposals_docx(
     meta_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     meta_table.autofit = True
 
+    export_now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     meta_entries = [
-        ("任务编号", task.task_id, "目标站点", f"{task.platform.upper()} - {task.marketplace}"),
+        (
+            "任务编号",
+            task.task_id,
+            "目标站点",
+            f"{task.platform.upper()} - {task.marketplace}",
+        ),
         ("分析窗口", task.window_preset, "任务状态", task.status),
-        ("涉及产品数", str(len(items)), "导出时间", datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")),
+        ("涉及产品数", str(len(items)), "导出时间", export_now),
         ("落地原则", "100% 绑定原始真实评论证据", "工程数值状态", "未评估依据不捏造"),
     ]
     for r_idx, (k1, v1, k2, v2) in enumerate(meta_entries):
@@ -264,8 +284,8 @@ def _build_proposals_docx(
     p_spec2.runs[0].font.size = Pt(10.5)
 
     p_spec3 = doc.add_paragraph(
-        "3. 工程边界说明：开模费用、改模周期、运费节省等工程数值仅在企业输入及评估依据齐全时呈现。"
-        "依据系统 PRD 规范，当前阶段均明确标注为「未评估」，防止盲目立项。"
+        "3. 工程边界说明：开模费用、改模周期、运费节省等工程数值仅在评估依据"
+        "齐全时呈现。依据 PRD 规范，当前阶段均标注为「未评估」，防止盲目立项。"
     )
     p_spec3.runs[0].font.size = Pt(10.5)
 
@@ -280,16 +300,19 @@ def _build_proposals_docx(
         h_prod = doc.add_heading(f"产品 ASIN: {item.asin}", level=2)
         h_prod.runs[0].font.size = Pt(12)
 
-        sample_metrics = report.sample_metrics if report else (item.sample_metrics or {})
+        sample_metrics = (
+            report.sample_metrics if report else (item.sample_metrics or {})
+        )
         raw_cnt = sample_metrics.get("raw_review_count", 0)
         valid_cnt = sample_metrics.get("valid_review_count", 0)
         neg_ratio = sample_metrics.get("negative_review_ratio")
         neg_str = f"{neg_ratio * 100:.1f}%" if neg_ratio is not None else "暂无"
         avg_rt = sample_metrics.get("average_rating")
         rt_str = f"{avg_rt:.2f}" if avg_rt is not None else "暂无"
+        dq = report.data_quality if report else (item.data_quality or "未评估")
 
         doc.add_paragraph(
-            f"数据质量：{report.data_quality if report else (item.data_quality or '未评估')} | "
+            f"数据质量：{dq} | "
             f"财务状态：{report.financial_state if report else 'NOT_EVALUATED'} | "
             f"原始评论：{raw_cnt} 条 | 有效评论：{valid_cnt} 条 | "
             f"平均评分：{rt_str} | 负评占比：{neg_str}"
@@ -297,25 +320,34 @@ def _build_proposals_docx(
 
         # 2.1 产品物理本体优化
         doc.add_heading("1. 产品物理本体优化建议 (Product Optimization)", level=3)
-        prod_proposals = (
+        prod_props = (
             [p for p in report.proposals if p.get("column") == "PRODUCT_OPTIMIZATION"]
             if report
             else []
         )
-        if not prod_proposals:
+        if not prod_props:
             doc.add_paragraph("暂无本体优化建议（无证据的结论不作为有效建议）。")
         else:
-            for p in prod_proposals:
-                doc.add_paragraph(f"• 建议标题：{p.get('title', '')}", style="List Bullet")
+            for p in prod_props:
+                doc.add_paragraph(
+                    f"• 建议标题：{p.get('title', '')}", style="List Bullet"
+                )
                 doc.add_paragraph(f"  改动方案：{p.get('change_description', '')}")
-                doc.add_paragraph(f"  关联痛点：{', '.join(p.get('pain_point_ids', []))}")
+                doc.add_paragraph(
+                    f"  关联痛点：{', '.join(p.get('pain_point_ids', []))}"
+                )
                 evi_refs = p.get("evidence_refs", [])
                 if evi_refs:
                     doc.add_paragraph("  支撑证据摘录：")
                     for ref in evi_refs:
                         ev = evi_dict.get(ref)
                         if ev:
-                            rating = ev.source_metadata.get("rating") if ev.source_metadata else None
+                            meta = (
+                                ev.source_metadata
+                                if isinstance(ev.source_metadata, dict)
+                                else {}
+                            )
+                            rating = meta.get("rating")
                             doc.add_paragraph(
                                 f"    - [{ref}] ⭐ {rating or '-'} 分: “{ev.excerpt}”"
                             )
@@ -324,25 +356,38 @@ def _build_proposals_docx(
 
         # 2.2 包装与履约优化
         doc.add_heading("2. 包装与履约优化建议 (Packaging & Fulfillment)", level=3)
-        pack_proposals = (
-            [p for p in report.proposals if p.get("column") == "PACKAGING_FULFILLMENT_OPTIMIZATION"]
+        pack_props = (
+            [
+                p
+                for p in report.proposals
+                if p.get("column") == "PACKAGING_FULFILLMENT_OPTIMIZATION"
+            ]
             if report
             else []
         )
-        if not pack_proposals:
+        if not pack_props:
             doc.add_paragraph("暂无包装履约优化建议（无证据的结论不作为有效建议）。")
         else:
-            for p in pack_proposals:
-                doc.add_paragraph(f"• 建议标题：{p.get('title', '')}", style="List Bullet")
+            for p in pack_props:
+                doc.add_paragraph(
+                    f"• 建议标题：{p.get('title', '')}", style="List Bullet"
+                )
                 doc.add_paragraph(f"  改动方案：{p.get('change_description', '')}")
-                doc.add_paragraph(f"  关联痛点：{', '.join(p.get('pain_point_ids', []))}")
+                doc.add_paragraph(
+                    f"  关联痛点：{', '.join(p.get('pain_point_ids', []))}"
+                )
                 evi_refs = p.get("evidence_refs", [])
                 if evi_refs:
                     doc.add_paragraph("  支撑证据摘录：")
                     for ref in evi_refs:
                         ev = evi_dict.get(ref)
                         if ev:
-                            rating = ev.source_metadata.get("rating") if ev.source_metadata else None
+                            meta = (
+                                ev.source_metadata
+                                if isinstance(ev.source_metadata, dict)
+                                else {}
+                            )
+                            rating = meta.get("rating")
                             doc.add_paragraph(
                                 f"    - [{ref}] ⭐ {rating or '-'} 分: “{ev.excerpt}”"
                             )
@@ -367,7 +412,8 @@ def _build_proposals_docx(
                 row_cells = pain_tbl.add_row().cells
                 row_cells[0].text = pt.get("pain_point_id", "")
                 row_cells[1].text = pt.get("label", "")
-                row_cells[2].text = f"{pt.get('severity_level', '')} ({pt.get('severity_score', '')}分)"
+                score = pt.get("severity_score", "")
+                row_cells[2].text = f"{pt.get('severity_level', '')} ({score}分)"
                 row_cells[3].text = str(pt.get("actual_frequency", 0))
                 row_cells[4].text = pt.get("summary", "")
 
@@ -379,8 +425,9 @@ def _build_proposals_docx(
                 doc.add_paragraph(f"• [{w.get('code', 'WARN')}] {w.get('message', '')}")
         else:
             doc.add_paragraph("• 样本分析过程中未发现高危阻断预警。")
-        doc.add_paragraph("• 工程数值边界：模具公差、改模周期及运费核算当前标记为「未评估」。")
-
+        doc.add_paragraph(
+            "• 工程边界：模具公差、改模周期及运费核算当前标记为「未评估」。"
+        )
         doc.add_paragraph()
 
     out = io.BytesIO()
@@ -394,7 +441,7 @@ def export_task_charter_zip(
     tenant_id: str,
     task_id: str,
 ) -> tuple[bytes, str]:
-    """Export the engineering task charter as a zip archive containing docx and per-product xlsx."""
+    """Export the engineering task charter as a zip archive."""
     task = session.scalar(
         select(Task).where(Task.tenant_id == tenant_id, Task.task_id == task_id)
     )
@@ -422,7 +469,9 @@ def export_task_charter_zip(
     reports_map: dict[str, Report] = {r.item_id: r for r in reports}
 
     evidences = session.scalars(
-        select(Evidence).where(Evidence.tenant_id == tenant_id, Evidence.task_id == task_id)
+        select(Evidence).where(
+            Evidence.tenant_id == tenant_id, Evidence.task_id == task_id
+        )
     ).all()
     evidences_by_item: dict[str, list[Evidence]] = {}
     evidences_by_ref: dict[str, dict[str, Evidence]] = {}
@@ -455,3 +504,49 @@ def export_task_charter_zip(
 
     filename = f"工程任务书_{task_id}.zip"
     return zip_buffer.getvalue(), filename
+
+
+if __name__ == "__main__":
+    demo_task = Task(
+        task_id="tsk_selfcheck",
+        tenant_id="t_demo",
+        platform="amazon",
+        marketplace="US",
+        window_preset="3m",
+        status=TaskStatus.COMPLETED.value,
+    )
+    demo_item = TaskItem(
+        item_id="itm_selfcheck",
+        task_id="tsk_selfcheck",
+        tenant_id="t_demo",
+        asin="B000SELF01",
+        status=TaskStatus.COMPLETED.value,
+    )
+    demo_report = Report(
+        report_id="rpt_selfcheck",
+        tenant_id="t_demo",
+        task_id="tsk_selfcheck",
+        item_id="itm_selfcheck",
+        data_quality="SUFFICIENT",
+        sample_metrics={"raw_review_count": 10, "valid_review_count": 8},
+        financial_state="NOT_EVALUATED",
+        pain_points=[
+            {"pain_point_id": "p1", "label": "螺丝滑丝", "actual_frequency": 2}
+        ],
+        proposals=[
+            {
+                "proposal_id": "pr1",
+                "column": "PRODUCT_OPTIMIZATION",
+                "title": "更换高硬度螺丝",
+            }
+        ],
+        warnings=[],
+        model_metadata={},
+    )
+    d_bytes = _build_proposals_docx(
+        demo_task, [demo_item], {demo_item.item_id: demo_report}, {}
+    )
+    assert len(d_bytes) > 0, "DOCX generation failed"
+    x_bytes = _build_product_xlsx(demo_task, demo_item, demo_report, [])
+    assert len(x_bytes) > 0, "XLSX generation failed"
+    print("Export self-check OK")

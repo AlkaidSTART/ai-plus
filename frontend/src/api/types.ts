@@ -200,16 +200,16 @@ export function isTerminalTaskStatus(status: TaskStatus | null | undefined): boo
 }
 
 export interface FinancialEvaluateRequest {
-  mold_cost?: number | null
-  sample_cost?: number | null
-  moq?: number | null
-  unit_product_cost?: number | null
-  expected_sales_price?: number | null
-  shipping_cost_per_unit?: number | null
-  monthly_estimated_sales?: number | null
+  mold_cost?: number
+  sample_cost?: number
+  moq?: number
+  unit_product_cost?: number
+  expected_sales_price?: number
+  shipping_cost_per_unit?: number
+  monthly_estimated_sales?: number
   target_payback_months?: number
   category_half_life_months?: number
-  max_cash_budget?: number | null
+  max_cash_budget?: number
   currency?: 'USD'
   rule_version?: string
   task_id?: string | null

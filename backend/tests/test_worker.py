@@ -176,9 +176,7 @@ async def test_poll_executes_no_data_report_and_publishes_outbox(
         return _empty_product_page(url, timeout_ms=timeout_ms, headless=headless)
 
     assert await _poll(sqlite_session_factory, fake_fetcher, "worker-1") is True
-    assert calls == [
-        ("https://www.amazon.com/dp/B0FFWCNZGF?th=1&psc=1", 45000, True)
-    ]
+    assert calls == [("https://www.amazon.com/dp/B0FFWCNZGF?th=1&psc=1", 45000, True)]
 
     with sqlite_session_factory() as session:
         task = session.get(Task, "tsk_worker_test")

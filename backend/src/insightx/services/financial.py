@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from insightx.models import Report, Task, TaskItem, utc_now
+from insightx.models import Report, utc_now
 from insightx.schemas import (
     AlternativeSuggestion,
     BreakEvenPoint,
@@ -166,15 +166,17 @@ def evaluate_financial_risk(
     if unit_margin <= 0:
         triggered_rules.append("NEGATIVE_MARGIN")
         reasons.append(
-            f"负边际贡献熔断：单件售价(${expected_sales_price:.2f})无法覆盖采购履约成本(${variable_cost_per_unit:.2f})，"
-            f"单件贡献为 ${unit_margin:.2f} <= $0，销售产生结构性亏损，无法收回固定投入。"
+            f"负边际贡献熔断：单件售价(${expected_sales_price:.2f})无法覆盖"
+            f"采购履约成本(${variable_cost_per_unit:.2f})，单件贡献为 "
+            f"${unit_margin:.2f} <= $0，销售产生结构性亏损，无法收回固定投入。"
         )
 
     # Rule 2: MOLD_COST_RATIO_EXCEEDED
     if expected_sales_price > 0 and mold_cost_ratio > 35.0:
         triggered_rules.append("MOLD_COST_RATIO_EXCEEDED")
         reasons.append(
-            f"开模固定成本分摊超标熔断：单件分摊模具成本(${amortized_mold:.2f})占预期售价(${expected_sales_price:.2f})的 {mold_cost_ratio:.1f}%，"
+            f"开模固定成本分摊超标熔断：单件分摊模具成本(${amortized_mold:.2f})占"
+            f"预期售价(${expected_sales_price:.2f})的 {mold_cost_ratio:.1f}%，"
             f"超出 35.0% 警戒上限，沉没成本过重侵蚀抗风险空间。"
         )
 
@@ -184,15 +186,20 @@ def evaluate_financial_risk(
         triggered_rules.append("PAYBACK_PERIOD_EXCEEDED")
         limit_desc = "期望上限" if effective_limit == target_payback else "品类半衰期"
         reasons.append(
-            f"回本周期超期熔断：预估静态回本周期({payback_months:.1f} 个月)超出{limit_desc}({effective_limit} 个月)，"
-            f"资金周转过慢，存在竞品迭代淘汰与压仓滞销风险。"
+            f"回本周期超期熔断：预估静态回本周期({payback_months:.1f} 个月)"
+            f"超出{limit_desc}({effective_limit} 个月)，资金周转过慢，"
+            f"存在竞品迭代淘汰与压仓滞销风险。"
         )
 
     # Rule 4: BUDGET_EXCEEDED
-    if request.max_cash_budget is not None and initial_batch_cash > request.max_cash_budget:
+    if (
+        request.max_cash_budget is not None
+        and initial_batch_cash > request.max_cash_budget
+    ):
         triggered_rules.append("BUDGET_EXCEEDED")
         reasons.append(
-            f"启动资金预算超限熔断：首批启动资金需求(${initial_batch_cash:,.2f})超过设定预算门槛(${request.max_cash_budget:,.2f})。"
+            f"启动资金预算超限熔断：首批启动资金需求(${initial_batch_cash:,.2f})"
+            f"超过设定预算门槛(${request.max_cash_budget:,.2f})。"
         )
 
     # 4. 状态与替代方案生成
@@ -204,18 +211,24 @@ def evaluate_financial_risk(
                 suggestion_id="alt_no_mold",
                 title="方案一：免开模小改（公模微调/换色定制）",
                 description=(
-                    f"放弃新开高额私模（当前开模费 ${mold_cost:,.2f}），改用成熟公模基础件，"
-                    "通过激光镭雕、喷涂换色或模块化通用配件实现改款微创新。开模费用降为 0。"
+                    f"放弃新开高额私模（当前开模费 ${mold_cost:,.2f}），"
+                    "改用成熟公模基础件，通过激光镭雕、喷涂换色或模块化通用配件"
+                    "实现改款微创新。开模费用降为 0。"
                 ),
-                estimated_impact=f"免除 ${mold_cost:,.2f} 开模投入，显著缩短回本周期并降低资金敞口。",
-                suggested_params={"mold_cost": 0.0, "sample_cost": min(sample_cost, 400.0)},
+                estimated_impact=(
+                    f"免除 ${mold_cost:,.2f} 开模投入，显著缩短回本周期并降低资金敞口。"
+                ),
+                suggested_params={
+                    "mold_cost": 0.0,
+                    "sample_cost": min(sample_cost, 400.0),
+                },
             ),
             AlternativeSuggestion(
                 suggestion_id="alt_packaging",
                 title="方案二：包装轻量化与履约折叠（降低单件运费）",
                 description=(
-                    f"针对单件海运与履约运费 ${shipping_cost_per_unit:.2f}，重新设计结构件与折叠彩盒，"
-                    "消除抛重体积冗余，争取海运运费下调 30%。"
+                    f"针对单件海运与履约运费 ${shipping_cost_per_unit:.2f}，"
+                    "重新设计结构件与折叠彩盒，消除抛重体积冗余，争取海运运费下调 30%。"
                 ),
                 estimated_impact=(
                     f"预计单件运费降至 ${shipping_cost_per_unit * 0.7:.2f}，"
@@ -229,12 +242,14 @@ def evaluate_financial_risk(
                 suggestion_id="alt_lower_moq",
                 title="方案三：阶梯小批量试产（调低初始 MOQ）",
                 description=(
-                    f"与工厂协商首批起订量从 {moq} 件降至 {max(200, int(moq * 0.5))} 件，"
-                    "先行投放小批量试水验证转化率与差评修复度，验证成功后再追加订单。"
+                    f"与工厂协商首批起订量从 {moq} 件降至 "
+                    f"{max(200, int(moq * 0.5))} 件，先行投放小批量试水验证转化率与"
+                    "差评修复度，验证成功后再追加订单。"
                 ),
                 estimated_impact=(
                     f"首批生产投入资金降低约 "
-                    f"${(moq - max(200, int(moq * 0.5))) * variable_cost_per_unit:,.2f}，控制滞销压仓敞口。"
+                    f"${(moq - max(200, int(moq * 0.5))) * variable_cost_per_unit:,.2f}"
+                    "，控制滞销压仓敞口。"
                 ),
                 suggested_params={"moq": max(200, int(moq * 0.5))},
             ),
@@ -243,9 +258,10 @@ def evaluate_financial_risk(
         financial_state = FinancialState.PASSED
         circuit_breaker = False
         reasons = [
-            f"各项财务风控指标均在安全阈值以内：单位边际贡献 ${unit_margin:.2f}（毛利率 {gross_margin_rate:.1f}%），"
-            f"预估回本周期 {payback_months:.1f} 个月（≤ 门槛 {effective_limit} 个月），"
-            f"单件模具分摊占比 {mold_cost_ratio:.1f}%（≤ 35.0%）。"
+            f"各项财务风控指标均在安全阈值以内：单位边际贡献 ${unit_margin:.2f}"
+            f"（毛利率 {gross_margin_rate:.1f}%），预估回本周期 {payback_months:.1f} "
+            f"个月（≤ 门槛 {effective_limit} 个月），单件模具分摊占比 "
+            f"{mold_cost_ratio:.1f}%（≤ 35.0%）。"
             "商业可行性满足立项准入标准（不等于保证市场商业成功）。"
         ]
         suggestions = []
@@ -340,7 +356,7 @@ def get_task_item_financial(
     task_id: str,
     item_id: str,
 ) -> FinancialEvaluateResponse:
-    """Retrieve existing financial evaluation for a task item or return default NOT_EVALUATED."""
+    """Fetch existing financial evaluation or return NOT_EVALUATED."""
     report = session.scalar(
         select(Report).where(
             Report.tenant_id == tenant_id,

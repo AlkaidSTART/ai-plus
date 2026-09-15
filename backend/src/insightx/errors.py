@@ -74,9 +74,7 @@ def _validation_details(exc: RequestValidationError) -> list[dict[str, Any]]:
     return details
 
 
-async def validation_error_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Convert FastAPI request validation failures to ``VALIDATION_ERROR``."""
 
     if not isinstance(exc, RequestValidationError):

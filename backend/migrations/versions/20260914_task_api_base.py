@@ -86,9 +86,7 @@ def upgrade() -> None:
         sa.Column("task_id", sa.String(length=64), nullable=False),
         sa.Column("task_item_id", sa.String(length=64), nullable=True),
         sa.Column("event_type", sa.String(length=64), nullable=False),
-        sa.Column(
-            "payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["task_id"],
@@ -132,12 +130,8 @@ def upgrade() -> None:
         sa.Column(
             "pain_points", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
-        sa.Column(
-            "proposals", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
-        sa.Column(
-            "warnings", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("proposals", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("warnings", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "model_metadata",
             postgresql.JSONB(astext_type=sa.Text()),
@@ -176,9 +170,7 @@ def upgrade() -> None:
         sa.Column("excerpt", sa.Text(), nullable=False),
         sa.Column("source_url", sa.Text(), nullable=True),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "provenance", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
@@ -252,9 +244,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=128), nullable=False),
         sa.Column("topic", sa.String(length=128), nullable=False),
         sa.Column("aggregate_id", sa.String(length=64), nullable=False),
-        sa.Column(
-            "payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("available_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
@@ -271,16 +261,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_outbox_messages_status_available", table_name="outbox_messages"
-    )
+    op.drop_index("ix_outbox_messages_status_available", table_name="outbox_messages")
     op.drop_table("outbox_messages")
     op.drop_table("idempotency_records")
     op.drop_index("ix_evidence_claim_refs_claim", table_name="evidence_claim_refs")
     op.drop_table("evidence_claim_refs")
-    op.drop_index(
-        "ix_evidence_tenant_task_item_created", table_name="evidence"
-    )
+    op.drop_index("ix_evidence_tenant_task_item_created", table_name="evidence")
     op.drop_index("ix_evidence_tenant_source_type", table_name="evidence")
     op.drop_table("evidence")
     op.drop_index("ix_reports_tenant_task_item", table_name="reports")

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Download, ExternalLink, Package, Wrench } from '@lucide/vue'
+import { Download, ExternalLink, Loader2, Package, Wrench } from '@lucide/vue'
+import { toast } from 'vue-sonner'
 import EmptyState from '@/components/EmptyState.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import type { ReportProposal } from '@/api/client'
+import { exportTask, type ReportProposal } from '@/api/client'
 import { useTaskDetail, useTaskEvidence, useTaskList, useTaskReport } from '@/composables/useTasks'
 
 /**
@@ -43,6 +44,29 @@ const packagingProposals = computed(
 
 const selectedProposal = ref<ReportProposal | null>(null)
 const evidenceOpen = ref(false)
+const isExporting = ref(false)
+
+async function handleExport() {
+  if (!latestTaskId.value || isExporting.value) return
+  isExporting.value = true
+  try {
+    const blob = await exportTask(latestTaskId.value)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `工程任务书_${latestTaskId.value}.zip`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    toast.success('工程任务书已成功导出')
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '导出失败'
+    toast.error(message)
+  } finally {
+    isExporting.value = false
+  }
+}
 
 function openEvidence(prop: ReportProposal) {
   selectedProposal.value = prop
@@ -65,9 +89,15 @@ const activeEvidences = computed(() => {
           面向工程与供应链的双栏落地清单；每条建议 100% 绑定原始评论证据。
         </p>
       </div>
-      <Button variant="outline" disabled title="工程任务书导出为后续阶段能力">
-        <Download />
-        导出工程任务书
+      <Button
+        variant="outline"
+        :disabled="!latestTaskId || isExporting"
+        :title="!latestTaskId ? '无可用任务' : '导出工程任务书压缩包（含 Word 建议与各产品 Excel）'"
+        @click="handleExport"
+      >
+        <Loader2 v-if="isExporting" class="size-4 animate-spin" />
+        <Download v-else class="size-4" />
+        {{ isExporting ? '正在导出...' : '导出工程任务书' }}
       </Button>
     </div>
 

@@ -543,8 +543,9 @@ def _parse_review_node(
     if not source_ref:
         identified = _find_descendant(
             node,
-            lambda _candidate, attrs: attrs.get("id", "").startswith("R")
-            and len(attrs.get("id", "")) >= 8,
+            lambda _candidate, attrs: (
+                attrs.get("id", "").startswith("R") and len(attrs.get("id", "")) >= 8
+            ),
         )
         if identified is not None:
             source_ref = _attributes(identified).get("id")
@@ -553,8 +554,10 @@ def _parse_review_node(
 
     body_node = _find_descendant(
         node,
-        lambda _candidate, attrs: attrs.get("data-hook") == "review-body"
-        or "review-text" in attrs.get("class", ""),
+        lambda _candidate, attrs: (
+            attrs.get("data-hook") == "review-body"
+            or "review-text" in attrs.get("class", "")
+        ),
     )
     body = _node_text(body_node) if body_node is not None else ""
     title_node = _find_descendant(
@@ -706,9 +709,7 @@ def _replace_evidence(
                 EvidenceClaimRef.evidence_id.in_(evidence_ids)
             )
         )
-        session.execute(
-            delete(Evidence).where(Evidence.evidence_id.in_(evidence_ids))
-        )
+        session.execute(delete(Evidence).where(Evidence.evidence_id.in_(evidence_ids)))
 
     for review in reviews:
         session.add(
@@ -974,9 +975,7 @@ def execute_task_pipeline(
             reviews, excluded_review_count = _extract_reviews(page.dom)
             valid_review_count = len(reviews)
             raw_review_count = valid_review_count + excluded_review_count
-            missing_reasons = (
-                ["NO_RAW_REVIEWS"] if raw_review_count == 0 else []
-            )
+            missing_reasons = ["NO_RAW_REVIEWS"] if raw_review_count == 0 else []
             if raw_review_count > 0:
                 missing_reasons.append("MODEL_NOT_CONFIGURED")
             sample_metrics = _sample_metrics(
@@ -1004,9 +1003,7 @@ def execute_task_pipeline(
                 }
             ]
             data_quality = (
-                DataQuality.NO_DATA
-                if raw_review_count == 0
-                else DataQuality.PARTIAL
+                DataQuality.NO_DATA if raw_review_count == 0 else DataQuality.PARTIAL
             )
             model_metadata: dict[str, Any] = {
                 "engine": "deterministic_worker",
