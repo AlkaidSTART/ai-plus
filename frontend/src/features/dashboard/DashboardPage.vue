@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useQueryClient } from '@tanstack/vue-query'
 import { Inbox, Loader2, Sparkles } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
+import type { NodeProgressPayload, TaskEvent } from '@/api/events.types'
 import EmptyState from '@/components/EmptyState.vue'
 import KpiCard from '@/components/KpiCard.vue'
-import SseTimeline from '@/components/SseTimeline.vue'
+import SseTimeline, { type TimelineNode } from '@/components/SseTimeline.vue'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -13,9 +16,47 @@ import {
 } from '@/components/ui/card'
 import { useUiStore } from '@/stores/ui'
 import { useTaskList } from '@/composables/useTasks'
+import { useTaskEvents } from '@/composables/useTaskEvents'
 
 const ui = useUiStore()
+const queryClient = useQueryClient()
 const { data: taskPage, isLoading: tasksLoading } = useTaskList({ limit: 20 })
+const latestTaskId = computed(() => taskPage.value?.items[0]?.task_id ?? null)
+const timelineNodes = ref<TimelineNode[]>([])
+
+function upsertTimelineNode(event: TaskEvent<NodeProgressPayload>): void {
+  if (event.type !== 'task_item.node_progress') return
+  const payload = event.payload
+  const id = `${event.task_item_id ?? event.task_id}:${payload.node_id}`
+  const node: TimelineNode = {
+    id,
+    name: payload.node_name,
+    status: payload.status,
+    durationMs: payload.duration_ms,
+    note: payload.error?.message ?? payload.skip_reason ?? null,
+  }
+  const index = timelineNodes.value.findIndex((item) => item.id === id)
+  timelineNodes.value =
+    index === -1
+      ? [...timelineNodes.value, node]
+      : timelineNodes.value.map((item, itemIndex) => (itemIndex === index ? node : item))
+}
+
+function onTaskEvent(event: TaskEvent): void {
+  if (event.type === 'task_item.node_progress') {
+    upsertTimelineNode(event as TaskEvent<NodeProgressPayload>)
+    return
+  }
+  void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+}
+
+const { connect } = useTaskEvents(latestTaskId, { onEvent: onTaskEvent })
+
+watch(latestTaskId, (taskId, previousTaskId) => {
+  if (taskId === previousTaskId) return
+  timelineNodes.value = []
+  if (taskId) connect()
+}, { immediate: true })
 </script>
 
 <template>
@@ -42,11 +83,11 @@ const { data: taskPage, isLoading: tasksLoading } = useTaskList({ limit: 20 })
         <CardHeader>
           <CardTitle class="text-base font-semibold">Agent 执行流</CardTitle>
           <CardDescription>
-            SSE 展示真实节点与每个 ASIN 状态，区分跳过/无数据/失败/取消；断线后按游标回放。
+            SSE 展示真实节点与每个 ASIN 状态，区分跳过/失败/取消；断线后按游标回放。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SseTimeline :nodes="[]" />
+          <SseTimeline :nodes="timelineNodes" />
         </CardContent>
       </Card>
 

@@ -1,87 +1,117 @@
 /**
- * Thin fetch wrapper for InsightX REST API.
- * Vite proxy forwards /api → backend; no base URL needed.
+ * Thin fetch wrapper for the InsightX REST API.
+ * Vite forwards `/api` to the backend in development.
  */
+import type {
+  EvidenceResponse,
+  HealthResponse,
+  ListEvidenceParams,
+  ListTasksParams,
+  Page,
+  ReportResponse,
+  TaskCreatedResponse,
+  TaskCreateRequest,
+  TaskListItem,
+  TaskSnapshot,
+} from './types'
+
+export * from './types'
 
 export class ApiError extends Error {
   status: number
   code: string
   details?: unknown
+  retryable: boolean
+  requestId: string | null
 
-  constructor(status: number, code: string, message: string, details?: unknown) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details?: unknown,
+    retryable = false,
+    requestId: string | null = null,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
     this.details = details
+    this.retryable = retryable
+    this.requestId = requestId
   }
+
+  get isReportNotReady(): boolean {
+    return this.status === 409 && this.code === 'REPORT_NOT_READY'
+  }
+}
+
+type JsonObject = Record<string, unknown>
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
-  const body = await res.json()
-  if (!res.ok) {
-    const err = body?.error ?? {}
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? res.statusText, err.details)
+  const text = await res.text()
+
+  let body: unknown = null
+  if (text) {
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = text
+    }
   }
-  return body.data as T
+
+  if (!res.ok) {
+    const error = isJsonObject(body) && isJsonObject(body.error) ? body.error : {}
+    throw new ApiError(
+      res.status,
+      typeof error.code === 'string' ? error.code : 'UNKNOWN',
+      typeof error.message === 'string' ? error.message : res.statusText || '请求失败',
+      error.details,
+      error.retryable === true,
+      typeof error.request_id === 'string' ? error.request_id : null,
+    )
+  }
+
+  if (res.status === 204 || !text) return undefined as T
+  if (isJsonObject(body) && body.code === 0 && 'data' in body) return body.data as T
+  return body as T
 }
 
-// --- Types (mirror backend schemas, minimal subset) ---
-
-export interface TaskWindow {
-  preset: '1m' | '3m' | '6m'
+function withQuery(path: string, values: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== '') params.set(key, String(value))
+  }
+  const query = params.toString()
+  return query ? `${path}?${query}` : path
 }
 
-export interface TaskCreateRequest {
-  asins: string[]
-  platform: 'amazon'
-  marketplace: 'US'
-  window: TaskWindow
+function jsonRequest(body: unknown): Pick<RequestInit, 'headers' | 'body'> {
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }
 }
-
-export interface TaskCreatedItem {
-  item_id: string
-  asin: string
-  status: string
-}
-
-export interface TaskCreatedResponse {
-  task_id: string
-  status: string
-  reused: boolean
-  parent_task_id: string | null
-  created_at: string
-  items: TaskCreatedItem[]
-}
-
-export interface TaskListItem {
-  task_id: string
-  status: string
-  platform: string
-  marketplace: string
-  window: TaskWindow
-  created_at: string
-  updated_at: string
-  total_items: number
-  completed_items: number
-  failed_items: number
-  canceled_items: number
-  last_event_id: string | null
-}
-
-export interface Page<T> {
-  items: T[]
-  next_cursor: string | null
-}
-
-// ponytail: full TaskSnapshot type omitted — add when detail page exists
 
 // --- Endpoints ---
 
-export function createTask(body: TaskCreateRequest, idempotencyKey: string) {
+export function getHealth(signal?: AbortSignal) {
+  return request<HealthResponse>('/api/v1/health', { signal })
+}
+
+export function createTask(
+  body: TaskCreateRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) {
   return request<TaskCreatedResponse>('/api/v1/tasks', {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey,
@@ -90,19 +120,68 @@ export function createTask(body: TaskCreateRequest, idempotencyKey: string) {
   })
 }
 
-export function listTasks(params?: { status?: string; cursor?: string; limit?: number }) {
-  const qs = new URLSearchParams()
-  if (params?.status) qs.set('status', params.status)
-  if (params?.cursor) qs.set('cursor', params.cursor)
-  if (params?.limit) qs.set('limit', String(params.limit))
-  const query = qs.toString()
-  return request<Page<TaskListItem>>(`/api/v1/tasks${query ? `?${query}` : ''}`)
+export function listTasks(params: ListTasksParams = {}, signal?: AbortSignal) {
+  return request<Page<TaskListItem>>(
+    withQuery('/api/v1/tasks', {
+      status: params.status,
+      cursor: params.cursor,
+      limit: params.limit,
+    }),
+    { signal },
+  )
 }
 
-export function getTask(taskId: string) {
-  return request<unknown>(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
+export function getTask(taskId: string, signal?: AbortSignal) {
+  return request<TaskSnapshot>(`/api/v1/tasks/${encodeURIComponent(taskId)}`, { signal })
 }
 
-export function cancelTask(taskId: string) {
-  return request<unknown>(`/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' })
+export function cancelTask(taskId: string, signal?: AbortSignal) {
+  return request<TaskSnapshot>(`/api/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
+    method: 'POST',
+    signal,
+  })
+}
+
+export function retryTask(
+  taskId: string,
+  itemIds: string[],
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) {
+  return request<TaskCreatedResponse>(`/api/v1/tasks/${encodeURIComponent(taskId)}/retry`, {
+    method: 'POST',
+    signal,
+    ...jsonRequest({ item_ids: itemIds }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+  })
+}
+
+export function getReport(taskId: string, itemId: string, signal?: AbortSignal) {
+  return request<ReportResponse>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/report`,
+    { signal },
+  )
+}
+
+export function listEvidence(
+  taskId: string,
+  itemId: string,
+  params: ListEvidenceParams = {},
+  signal?: AbortSignal,
+) {
+  return request<Page<EvidenceResponse>>(
+    withQuery(
+      `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/evidence`,
+      {
+        claim_id: params.claim_id,
+        source_type: params.source_type,
+        cursor: params.cursor,
+        limit: params.limit,
+      },
+    ),
+    { signal },
+  )
 }

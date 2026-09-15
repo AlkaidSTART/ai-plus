@@ -4,7 +4,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import type { NodeStatus } from '@/types/domain'
 
 /**
- * SSE 节点时间线：展示后端推送的真实节点状态（含跳过/无数据/失败/取消），
+ * SSE 节点时间线：展示后端推送的真实节点状态（含跳过/失败/取消），
  * 不伪造固定步骤动画（PRD P0-04）。
  */
 export interface TimelineNode {
@@ -24,7 +24,6 @@ const DOT: Record<NodeStatus, string> = {
   SKIPPED: 'bg-slate-300',
   FAILED: 'bg-destructive',
   CANCELED: 'bg-slate-400',
-  NO_DATA: 'bg-warning',
 }
 
 const LABEL: Record<NodeStatus, string> = {
@@ -34,7 +33,6 @@ const LABEL: Record<NodeStatus, string> = {
   SKIPPED: '跳过',
   FAILED: '失败',
   CANCELED: '已取消',
-  NO_DATA: '无数据',
 }
 
 function formatDuration(ms: number | null | undefined): string | null {

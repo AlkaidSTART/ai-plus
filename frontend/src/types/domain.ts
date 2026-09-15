@@ -13,4 +13,4 @@ export type Severity = 'CRITICAL' | 'MODERATE' | 'MINOR'
 export type FinancialState = 'NOT_EVALUATED' | 'PASSED' | 'VETOED'
 
 /** SSE 节点执行状态（真实节点，不伪造固定步骤） */
-export type NodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'CANCELED' | 'NO_DATA'
+export type NodeStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'SKIPPED' | 'FAILED' | 'CANCELED'

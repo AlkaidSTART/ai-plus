@@ -1,7 +1,7 @@
 # InsightX 前后端接口文档（契约草案）
 
-> 文档日期：2026-09-14
-> 文档状态：接口盘点 + P0 契约草案，尚未生成正式 OpenAPI
+> 文档日期：2026-09-15
+> 文档状态：P0 任务 REST/SSE 已实现（执行器未接入），尚未生成正式 OpenAPI
 > 适用范围：Vue 3 前端与 FastAPI 后端之间的 HTTP REST + SSE 接口
 
 ## 1. 阅读说明
@@ -22,6 +22,7 @@
 | 标记 | 含义 |
 | --- | --- |
 | 已实现 | 当前仓库存在可运行代码或测试证据 |
+| P0 已实现-执行器未接入 | HTTP/SSE 传输、校验和 PostgreSQL 持久化已实现，但 Worker/工作流尚未产生完整业务结果 |
 | P0 拟议-未实现 | 已进入当前目标范围，但后端 DTO、路由和前端客户端尚未落地 |
 | P1 未来-未实现 | 已出现在产品规划中，接口与字段尚未冻结 |
 | P2 探索-未实现 | 仅有能力方向，尚不足以定义稳定接口 |
@@ -29,11 +30,19 @@
 
 ### 1.3 当前结论
 
-截至本文档日期，当前仓库**唯一已实现的业务 HTTP 接口**是：
+截至本文档日期，当前仓库已实现健康检查和 P0 任务接口：
 
 - `GET /api/v1/health`
+- `POST /api/v1/tasks`
+- `GET /api/v1/tasks`
+- `GET /api/v1/tasks/{task_id}`
+- `POST /api/v1/tasks/{task_id}/cancel`
+- `POST /api/v1/tasks/{task_id}/retry`
+- `GET /api/v1/tasks/{task_id}/events`
+- `GET /api/v1/tasks/{task_id}/items/{item_id}/report`
+- `GET /api/v1/tasks/{task_id}/items/{item_id}/evidence`
 
-`POST /api/v1/tasks` 等任务接口来自 PRD、架构文档和前端草案，目前均为 P0 拟议接口，尚未在后端实现。本文档中标注为“拟议”的字段名、枚举、状态码和 header 均需在后端 DTO 落地时确认。
+这些路由已具备 Pydantic 校验、统一错误信封、PostgreSQL 持久化和 SSE 回放，前端也已接入创建、列表和 SSE。Celery Worker、outbox dispatcher 与 LangGraph 尚未接入，因此新任务会保持 `QUEUED`，报告和证据不会有生产数据。本文档仍是手写契约说明，不能替代正式生成的 OpenAPI/SSE schema。
 
 ## 2. 通用 HTTP 约定
 
@@ -49,13 +58,13 @@
 
 ### 2.2 JSON 字段命名
 
-P0 推荐统一使用 `snake_case`，以匹配 FastAPI/Pydantic 的常见默认输出，并避免前端草案和生成类型之间反复转换。
+P0 推荐统一使用 `snake_case`，以匹配 FastAPI/Pydantic 的常见默认输出，并避免前端手写类型和生成类型之间反复转换。
 
-当前 `frontend/src/api/events.types.ts` 使用 `taskId`、`taskItemId` 等 camelCase 字段，属于未完成草案；在后端事件 DTO 确定前，不得把该草案视为正式 wire format。
+前端事件类型已与后端统一使用 `task_id`、`task_item_id` 等 snake_case wire 字段；正式生成 schema 前仍需避免手工类型长期漂移。
 
 ### 2.3 成功响应信封
 
-健康检查已实现 `{code, message, data}` 外形。P0 业务接口拟沿用相同外形：
+健康检查和 P0 任务接口使用 `{code, message, data}` 外形：
 
 ```json
 {
@@ -73,11 +82,11 @@ P0 推荐统一使用 `snake_case`，以匹配 FastAPI/Pydantic 的常见默认�
 - HTTP 状态码仍表达真实语义，不能用 HTTP 200 包裹失败。
 - SSE 不使用该 JSON 信封，事件格式见第 6 节。
 
-该成功信封目前只有健康检查有实现证据，其他接口仍在待确认列表。
+任务接口成功响应也使用该信封；SSE 单独使用事件信封。
 
 ### 2.4 错误响应信封
 
-P0 拟统一为：
+P0 错误信封已统一为：
 
 ```json
 {
@@ -99,7 +108,7 @@ P0 拟统一为：
 | `error.retryable` | boolean | 是 | 当前请求是否适合按相同语义重试 |
 | `error.request_id` | string | 是 | 用于日志关联和问题排查 |
 
-当前后端尚未实现业务错误信封或统一异常处理器。
+后端已通过 `insightx.errors` 安装统一异常处理器，并为 API 错误返回 `{error:{...}}` 信封。
 
 ### 2.5 认证、租户与授权
 
@@ -122,7 +131,7 @@ P0 拟统一为：
 
 ### 2.7 幂等
 
-创建任务和重试任务拟要求 `Idempotency-Key` 请求头。该 header 名尚未由后端 DTO 最终确认。
+创建任务和重试任务已要求 `Idempotency-Key` 请求头，并在 PostgreSQL 中持久化幂等记录。
 
 - 同一逻辑请求因网络错误重试时，必须复用相同 key。
 - 请求内容变化时必须生成新 key。
@@ -170,14 +179,14 @@ P0 拟统一为：
 | 成熟度 | 方法 | 路径 | 用途 |
 | --- | --- | --- | --- |
 | 已实现 | GET | `/api/v1/health` | 服务健康检查 |
-| P0 拟议-未实现 | POST | `/api/v1/tasks` | 创建异步诊断任务 |
-| P0 拟议-未实现 | GET | `/api/v1/tasks` | 分页查询当前身份可见任务 |
-| P0 拟议-未实现 | GET | `/api/v1/tasks/{task_id}` | 获取任务一致性快照 |
-| P0 拟议-未实现 | POST | `/api/v1/tasks/{task_id}/cancel` | 显式请求取消任务 |
-| P0 拟议-未实现 | POST | `/api/v1/tasks/{task_id}/retry` | 重试失败的任务项 |
-| P0 拟议-未实现 | GET | `/api/v1/tasks/{task_id}/events` | 订阅任务 SSE 事件与历史回放 |
-| P0 拟议-未实现 | GET | `/api/v1/tasks/{task_id}/items/{item_id}/report` | 获取单 ASIN 报告 |
-| P0 拟议-未实现 | GET | `/api/v1/tasks/{task_id}/items/{item_id}/evidence` | 查询报告引用的文本证据 |
+| P0 已实现-执行器未接入 | POST | `/api/v1/tasks` | 创建异步诊断任务 |
+| P0 已实现-执行器未接入 | GET | `/api/v1/tasks` | 分页查询当前身份可见任务 |
+| P0 已实现-执行器未接入 | GET | `/api/v1/tasks/{task_id}` | 获取任务一致性快照 |
+| P0 已实现-执行器未接入 | POST | `/api/v1/tasks/{task_id}/cancel` | 显式请求取消任务 |
+| P0 已实现-执行器未接入 | POST | `/api/v1/tasks/{task_id}/retry` | 重试失败的任务项 |
+| P0 已实现-执行器未接入 | GET | `/api/v1/tasks/{task_id}/events` | 订阅任务 SSE 事件与历史回放 |
+| P0 已实现-执行器未接入 | GET | `/api/v1/tasks/{task_id}/items/{item_id}/report` | 获取单 ASIN 报告 |
+| P0 已实现-执行器未接入 | GET | `/api/v1/tasks/{task_id}/items/{item_id}/evidence` | 查询报告引用的文本证据 |
 
 ## 5. P0 共享 DTO 与状态
 
@@ -221,7 +230,7 @@ P0 固定为 `NOT_EVALUATED`。`PASSED` 与 `VETOED` 属于 P1，不能由任务
 
 #### 节点状态
 
-P0 拟议：
+当前枚举：
 
 ```text
 PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
@@ -230,7 +239,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 说明：
 
 - `NO_DATA` 是报告数据质量，不是节点执行状态，推荐不并入节点状态。
-- 当前前端 `frontend/src/types/domain.ts` 使用 `SUCCESS` 并额外包含 `NO_DATA`，与本文档推荐存在差异，待后端事件 DTO 最终确认。
+- 当前前端 `frontend/src/types/domain.ts` 已与后端节点状态枚举保持一致；`NO_DATA` 仅作为数据质量值使用。
 - 节点是否存在、节点顺序与名称由后端实际执行记录决定；前端不得自行编造固定七步进度。
 
 ### 5.2 `Page<T>`
@@ -262,7 +271,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 | `asins` | string[] | 是 | 1–10 个；去重；大写 10 位 `^[A-Z0-9]{10}$` |
 | `platform` | string | 是 | P0 固定 `amazon` |
 | `marketplace` | string | 是 | P0 固定 `US` |
-| `window.preset` | string | 是 | P0 拟议 `1m | 3m | 6m`，分别表示近 1/3/6 个月 |
+| `window.preset` | string | 是 | 已实现 `1m | 3m | 6m`，分别表示近 1/3/6 个月 |
 
 客户端不提交 `tenant_id`。当前界面没有多项目选择，P0 请求也不把 `project_id` 设为必填；若产品确认多项目语义，需要重新修订契约。
 
@@ -439,11 +448,11 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `POST` |
 | 路径 | `/api/v1/tasks` |
 | 鉴权 | 需要 |
-| 幂等 header | `Idempotency-Key`（待确认） |
+| 幂等 header | `Idempotency-Key` |
 | 请求 DTO | `TaskCreateRequest` |
 | 成功状态 | `202 Accepted` |
 | 成功 DTO | `TaskCreatedResponse` |
@@ -461,7 +470,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `GET` |
 | 路径 | `/api/v1/tasks` |
 | 鉴权 | 需要 |
@@ -486,7 +495,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `GET` |
 | 路径 | `/api/v1/tasks/{task_id}` |
 | 鉴权 | 需要 |
@@ -501,7 +510,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `POST` |
 | 路径 | `/api/v1/tasks/{task_id}/cancel` |
 | 鉴权 | 需要 |
@@ -521,11 +530,11 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `POST` |
 | 路径 | `/api/v1/tasks/{task_id}/retry` |
 | 鉴权 | 需要 |
-| 幂等 header | `Idempotency-Key`（待确认） |
+| 幂等 header | `Idempotency-Key` |
 | 请求 body | `{"item_ids": ["itm_01J..."]}` |
 | 成功状态 | `202 Accepted` |
 | 成功 DTO | `TaskCreatedResponse`，其中 `parent_task_id` 为原任务 |
@@ -542,7 +551,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `GET` |
 | 路径 | `/api/v1/tasks/{task_id}/items/{item_id}/report` |
 | 鉴权 | 需要 |
@@ -561,7 +570,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `GET` |
 | 路径 | `/api/v1/tasks/{task_id}/items/{item_id}/evidence` |
 | 鉴权 | 需要 |
@@ -581,7 +590,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 
 | 项目 | 内容 |
 | --- | --- |
-| 成熟度 | P0 拟议-未实现 |
+| 成熟度 | P0 已实现-执行器未接入 |
 | 方法 | `GET` |
 | 路径 | `/api/v1/tasks/{task_id}/events` |
 | 鉴权 | 需要 |
@@ -590,7 +599,7 @@ PENDING | RUNNING | SUCCESS | SKIPPED | FAILED | CANCELED
 | header | `Last-Event-ID`：断线自动重连时优先于 `after` |
 | 响应 | `text/event-stream`，持续连接直到终态追平或客户端断开 |
 
-首帧拟议发送：
+首帧发送：
 
 ```text
 retry: 3000
@@ -609,7 +618,7 @@ SSE `id` 与 data 中的 `id` 相同，均为任务内有序、可去重的不�
 ```text
 id: 42
 event: task_item.node_progress
-data: {"version":1,"id":"42","type":"task_item.node_progress","task_id":"tsk_01J...","task_item_id":"itm_01J...","time":"2026-09-14T08:30:00Z","payload":{"node_id":"ingestion","node_name":"collection","status":"RUNNING","duration_ms":null,"skip_reason":null,"error":null}}
+data: {"version":1,"id":"42","type":"task_item.node_progress","task_id":"tsk_01J...","task_item_id":"itm_01J...","time":"2026-09-14T08:30:00Z","payload":{"node_id":"ingestion","node_name":"collection","status":"RUNNING","started_at":"2026-09-14T08:29:59Z","finished_at":null,"duration_ms":null,"skip_reason":null,"error":null}}
 
 ```
 
@@ -617,7 +626,7 @@ data: {"version":1,"id":"42","type":"task_item.node_progress","task_id":"tsk_01J
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `version` | integer | 是 | P0 草案为 `1` |
+| `version` | integer | 是 | 当前为 `1` |
 | `id` | string | 是 | 任务内有序事件 ID，同时用于 SSE `id:` |
 | `type` | string | 是 | 事件类型 |
 | `task_id` | string | 是 | 任务 ID |
@@ -631,17 +640,17 @@ data: {"version":1,"id":"42","type":"task_item.node_progress","task_id":"tsk_01J
 | --- | --- | --- |
 | `task.status_changed` | 批次进入新生命周期状态 | `{status,reason?}` |
 | `task_item.status_changed` | 单 ASIN 工作单元进入新生命周期状态；payload 可携带事件发生时的数据质量快照 | `{status,data_quality?,reason?,error?}` |
-| `task_item.node_progress` | 节点开始、成功、跳过、失败或取消 | `{node_id,node_name,status,duration_ms,skip_reason?,error?}` |
+| `task_item.node_progress` | 节点开始、成功、跳过、失败或取消 | `{node_id,node_name,status,started_at,finished_at,duration_ms,skip_reason,error}`；允许空值的字段仍必须出现 |
 
 事件 payload 中的任务、item、节点状态必须分别使用第 5.1 节对应枚举。P0 不定义 `stream.reset` 等没有实现依据的事件。
 
 ### 7.4 回放、去重与终态
 
-- 页面首次加载先调用任务快照，使用 `last_event_id` 作为 `after` 建立 SSE；没有游标时从该任务可保留的最早事件开始。
+- 当前 Dashboard 从任务列表首条选择最近任务，并以初始游标 0 建立 SSE，回放该任务已保留的全部事件；任务列表响应已提供 `last_event_id`，后续可在需要时用它作为 `after` 衔接快照。
 - 浏览器断线自动重连时发送 `Last-Event-ID`；后端以该 header 优先于查询参数，回放其后的持久事件。
 - 客户端必须去重：收到 `id` 不大于本地最后已应用 ID 的事件时忽略。
 - 游标非法或超出保留范围时，返回 `422 INVALID_EVENT_CURSOR`；前端重新获取快照并以新游标恢复，不能无限重连。
-- 任务进入 `COMPLETED`、`FAILED` 或 `CANCELED` 后，服务端发送终态事件并关闭流；客户端收到终态后主动关闭连接并刷新快照/报告。
+- 任务进入 `COMPLETED`、`FAILED` 或 `CANCELED` 后，服务端发送终态事件并关闭流；当前客户端收到终态后主动关闭连接并刷新任务列表，任务快照与报告刷新待对应页面接入。
 - 页面卸载只关闭客户端连接，不调用取消接口。
 - 事件保留时间、最大重放量和反向代理空闲超时尚未冻结，列为待确认项。
 
@@ -676,23 +685,23 @@ P1/P2 的具体路径和 DTO 尚未由 PRD 和目标架构冻结。本节只说�
 
 当前目标资源命名统一以 `/api/v1/tasks...` 为基线；如果未来明确需要兼容旧协议，必须单独设计迁移期和弃用策略。
 
-## 10. 待确认决策
+## 10. 已实现决策与后续边界
 
-| 议题 | 本文档推荐 | 必须确认的时点 |
+| 议题 | 当前状态 | 后续动作 |
 | --- | --- | --- |
-| JSON 命名 | `snake_case` | 后端首个业务 DTO 落地前 |
-| 成功信封 | `{code:0,message:"ok",data}` | 首个业务路由实现前 |
-| 错误信封 | `{error:{code,message,details,retryable,request_id}}` | 全局异常处理器实现前 |
-| 认证机制 | 服务端从认证身份推导租户；具体协议待定 | P0 鉴权实现前 |
-| 多项目语义 | P0 不要求 `project_id`，服务端推导租户/项目 | 任务创建 DTO 冻结前 |
-| 幂等键 | `Idempotency-Key` header | 创建/重试路由实现前 |
-| 时间窗 | `window.preset=1m|3m|6m` | 任务创建 DTO 冻结前 |
-| 重试模型 | 新任务 + `parent_task_id`，保留历史 | 重试路由实现前 |
-| 节点状态 | `SUCCESS`，`NO_DATA` 归数据质量 | 事件 schema 导出前 |
-| SSE 事件集 | 当前三个草案事件 | 事件 DTO 冻结前 |
-| SSE 保留策略 | 保留时间、最大回放量、游标失效规则待定 | SSE 实现与压测前 |
-| 报告/证据 | P0 只读、按 item 获取、文本证据优先 | P0 路由拆分前 |
-| 模型元数据 | 记录供应商、model_id、维度、prompt/规则版本 | 报告 DTO 冻结前 |
+| JSON 命名 | 已使用 `snake_case` | 生成契约后由类型检查防止漂移 |
+| 成功信封 | 任务 API 已使用 `{code:0,message:"ok",data}` | 导出 OpenAPI schema |
+| 错误信封 | 已使用 `{error:{code,message,details,retryable,request_id}}` | 导出 OpenAPI schema |
+| 认证机制 | 当前为 `AUTH_MODE=dev` 固定开发租户 | 实施服务端会话、成员关系和 CSRF |
+| 多项目语义 | P0 不要求 `project_id`，服务端当前推导开发租户 | 生产租户/项目选择器另行设计 |
+| 幂等键 | 创建/重试已要求 `Idempotency-Key` | 保持请求哈希冲突语义 |
+| 时间窗 | `window.preset=1m|3m|6m` 已实现 | DTO 冻结后生成契约 |
+| 重试模型 | 已实现新任务 + `parent_task_id` 并保留历史 | Worker 接入后验证真实失败项重试 |
+| 节点状态 | `SUCCESS` 为执行状态，`NO_DATA` 归数据质量 | 事件 schema 导出 |
+| SSE 事件集 | 当前三个事件已实现并接入前端 | 生成并冻结事件 schema |
+| SSE 保留策略 | 保留时间、最大回放量、游标失效规则待定 | SSE 压测前冻结 |
+| 报告/证据 | P0 只读路由已实现 | Worker 接入后才会产生真实报告和证据 |
+| 模型元数据 | 字段方向已定义，尚无生产执行数据 | 报告生成接入后验证来源记录 |
 
 这些决策应由后端 DTO 和对应测试固化，前端不得根据本文档单方面生成正式类型。
 
@@ -713,6 +722,6 @@ P1/P2 的具体路径和 DTO 尚未由 PRD 和目标架构冻结。本节只说�
 | 前后端通信与生成契约 | `docs/architecture.md` 第 5 节 |
 | 创建任务与异步流程 | `PRD.md` 第 6 节、`docs/architecture.md` 第 4–5 节 |
 | 状态边界 | `PRD.md` 第 6.2 节、`docs/architecture.md` 第 4.2 节 |
-| 前端 SSE 草案 | `frontend/src/composables/useTaskEvents.ts`、`frontend/src/api/events.types.ts` |
-| 前端新建任务草案 | `frontend/src/features/dashboard/NewTaskDialog.vue` |
+| 前端 SSE 接入 | `frontend/src/composables/useTaskEvents.ts`、`frontend/src/api/events.types.ts` |
+| 前端任务创建与列表 | `frontend/src/features/dashboard/NewTaskDialog.vue`、`frontend/src/api/client.ts` |
 | 历史接口快照 | `docs/前端设计.md` 第 4–5 节 |

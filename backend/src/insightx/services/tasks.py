@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal, cast
 from uuid import uuid4
 
-from sqlalchemy import Select, exists, func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,14 +32,18 @@ from insightx.schemas import (
     DataQuality,
     EvidenceResponse,
     EvidenceSourceType,
+    FinancialState,
     NodeProgress,
     Page,
+    ReportPainPoint,
+    ReportProposal,
     ReportResponse,
+    ReportWarning,
     RetryTaskRequest,
     SampleMetrics,
-    TaskCreateRequest,
     TaskCreatedItem,
     TaskCreatedResponse,
+    TaskCreateRequest,
     TaskError,
     TaskItemSnapshot,
     TaskListItem,
@@ -154,11 +158,19 @@ def _get_item_or_404(
     return item
 
 
-def _task_items(session: Session, task_id: str) -> list[TaskItem]:
+def _task_items(
+    session: Session,
+    *,
+    tenant_id: str,
+    task_id: str,
+) -> list[TaskItem]:
     return list(
         session.scalars(
             select(TaskItem)
-            .where(TaskItem.task_id == task_id)
+            .where(
+                TaskItem.tenant_id == tenant_id,
+                TaskItem.task_id == task_id,
+            )
             .order_by(TaskItem.created_at.asc(), TaskItem.item_id.asc())
         ).all()
     )
@@ -166,6 +178,8 @@ def _task_items(session: Session, task_id: str) -> list[TaskItem]:
 
 def _task_item_counts(
     session: Session,
+    *,
+    tenant_id: str,
     task_ids: Sequence[str],
 ) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {
@@ -176,7 +190,10 @@ def _task_item_counts(
         return counts
     rows = session.execute(
         select(TaskItem.task_id, TaskItem.status, func.count())
-        .where(TaskItem.task_id.in_(task_ids))
+        .where(
+            TaskItem.tenant_id == tenant_id,
+            TaskItem.task_id.in_(task_ids),
+        )
         .group_by(TaskItem.task_id, TaskItem.status)
     ).all()
     for row in rows:
@@ -196,13 +213,19 @@ def _task_item_counts(
 
 def _last_event_ids(
     session: Session,
+    *,
+    tenant_id: str,
     task_ids: Sequence[str],
 ) -> dict[str, int]:
     if not task_ids:
         return {}
     rows = session.execute(
         select(TaskEvent.task_id, func.max(TaskEvent.event_id))
-        .where(TaskEvent.task_id.in_(task_ids))
+        .join(Task, Task.task_id == TaskEvent.task_id)
+        .where(
+            Task.tenant_id == tenant_id,
+            TaskEvent.task_id.in_(task_ids),
+        )
         .group_by(TaskEvent.task_id)
     ).all()
     return {str(row[0]): int(row[1]) for row in rows}
@@ -211,10 +234,20 @@ def _last_event_ids(
 def _build_task_list_items(
     session: Session,
     tasks: Sequence[Task],
+    *,
+    tenant_id: str,
 ) -> list[TaskListItem]:
     task_ids = [task.task_id for task in tasks]
-    counts = _task_item_counts(session, task_ids)
-    last_event_ids = _last_event_ids(session, task_ids)
+    counts = _task_item_counts(
+        session,
+        tenant_id=tenant_id,
+        task_ids=task_ids,
+    )
+    last_event_ids = _last_event_ids(
+        session,
+        tenant_id=tenant_id,
+        task_ids=task_ids,
+    )
     return [
         TaskListItem(
             task_id=task.task_id,
@@ -242,12 +275,23 @@ def _build_snapshot(
     session: Session,
     task: Task,
 ) -> TaskSnapshot:
-    summary = _build_task_list_items(session, [task])[0]
-    items = _task_items(session, task.task_id)
+    summary = _build_task_list_items(
+        session,
+        [task],
+        tenant_id=task.tenant_id,
+    )[0]
+    items = _task_items(
+        session,
+        tenant_id=task.tenant_id,
+        task_id=task.task_id,
+    )
     item_ids = [item.item_id for item in items]
     report_item_ids = set(
         session.scalars(
-            select(Report.item_id).where(Report.task_id == task.task_id)
+            select(Report.item_id).where(
+                Report.tenant_id == task.tenant_id,
+                Report.task_id == task.task_id,
+            )
         ).all()
     )
     node_events: list[TaskEvent] = []
@@ -255,7 +299,9 @@ def _build_snapshot(
         node_events = list(
             session.scalars(
                 select(TaskEvent)
+                .join(Task, Task.task_id == TaskEvent.task_id)
                 .where(
+                    Task.tenant_id == task.tenant_id,
                     TaskEvent.task_id == task.task_id,
                     TaskEvent.task_item_id.in_(item_ids),
                     TaskEvent.event_type == "task_item.node_progress",
@@ -336,7 +382,11 @@ def _created_response(
     *,
     reused: bool,
 ) -> TaskCreatedResponse:
-    items = _task_items(session, task.task_id)
+    items = _task_items(
+        session,
+        tenant_id=task.tenant_id,
+        task_id=task.task_id,
+    )
     return TaskCreatedResponse(
         task_id=task.task_id,
         status=TaskStatus(task.status),
@@ -498,13 +548,13 @@ def create_task(
                 )
             )
             if existing is not None:
-                if existing.request_hash != request_hash:
-                    raise ApiError(
-                        409,
-                        "IDEMPOTENCY_CONFLICT",
-                        "The idempotency key was used with a different request.",
-                    )
-                return _created_response(session, existing.resource_id, reused=True)
+                return _reuse_idempotent_task(
+                    session,
+                    tenant_id=tenant_id,
+                    scope=_TASK_CREATE_SCOPE,
+                    key=idempotency_key,
+                    request_hash=request_hash,
+                )
 
             task, _ = _persist_task(
                 session,
@@ -576,7 +626,11 @@ def list_tasks(
         last = page_tasks[-1]
         next_cursor = _encode_cursor(last.created_at, last.task_id)
     return Page(
-        items=_build_task_list_items(session, page_tasks),
+        items=_build_task_list_items(
+            session,
+            page_tasks,
+            tenant_id=tenant_id,
+        ),
         next_cursor=next_cursor,
     )
 
@@ -632,7 +686,7 @@ def retry_task(
 ) -> TaskCreatedResponse:
     """Create a new task for selected failed items from a terminal task."""
 
-    payload = request.model_dump(mode="json")
+    payload = {"task_id": task_id, **request.model_dump(mode="json")}
     request_hash = _request_hash(payload)
     try:
         with session.begin():
@@ -644,13 +698,13 @@ def retry_task(
                 )
             )
             if existing is not None:
-                if existing.request_hash != request_hash:
-                    raise ApiError(
-                        409,
-                        "IDEMPOTENCY_CONFLICT",
-                        "The idempotency key was used with a different request.",
-                    )
-                return _created_response(session, existing.resource_id, reused=True)
+                return _reuse_idempotent_task(
+                    session,
+                    tenant_id=tenant_id,
+                    scope=_TASK_RETRY_SCOPE,
+                    key=idempotency_key,
+                    request_hash=request_hash,
+                )
 
             source_task = _get_task_or_404(
                 session,
@@ -756,10 +810,19 @@ def get_report(
         data_quality=DataQuality(report.data_quality),
         sample_metrics=SampleMetrics.model_validate(report.sample_metrics),
         generated_at=report.generated_at,
-        financial_state=report.financial_state,
-        pain_points=report.pain_points,
-        proposals=report.proposals,
-        warnings=report.warnings,
+        financial_state=FinancialState(report.financial_state),
+        pain_points=[
+            ReportPainPoint.model_validate(pain_point)
+            for pain_point in report.pain_points
+        ],
+        proposals=[
+            ReportProposal.model_validate(proposal)
+            for proposal in report.proposals
+        ],
+        warnings=[
+            ReportWarning.model_validate(warning)
+            for warning in report.warnings
+        ],
         model_metadata=report.model_metadata,
     )
 
@@ -798,8 +861,16 @@ def list_evidence(
     if claim_id is not None:
         statement = statement.where(
             Evidence.evidence_id.in_(
-                select(EvidenceClaimRef.evidence_id).where(
-                    EvidenceClaimRef.claim_id == claim_id
+                select(EvidenceClaimRef.evidence_id)
+                .join(
+                    Evidence,
+                    Evidence.evidence_id == EvidenceClaimRef.evidence_id,
+                )
+                .where(
+                    EvidenceClaimRef.claim_id == claim_id,
+                    Evidence.tenant_id == tenant_id,
+                    Evidence.task_id == task_id,
+                    Evidence.item_id == item_id,
                 )
             )
         )
@@ -875,8 +946,11 @@ def prepare_event_stream(
             task_id=task_id,
         )
         max_event_id = session.scalar(
-            select(func.max(TaskEvent.event_id)).where(
-                TaskEvent.task_id == task_id
+            select(func.max(TaskEvent.event_id))
+            .join(Task, Task.task_id == TaskEvent.task_id)
+            .where(
+                Task.tenant_id == tenant_id,
+                TaskEvent.task_id == task_id,
             )
         )
         latest = int(max_event_id or 0)
@@ -895,14 +969,23 @@ def fetch_task_events(
     task_id: str,
     after_event_id: int,
     limit: int = 100,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Load one ordered batch of SSE event envelopes."""
 
     with session_factory() as session:
+        if tenant_id is None:
+            tenant_id = session.scalar(
+                select(Task.tenant_id).where(Task.task_id == task_id)
+            )
+        if tenant_id is None:
+            return []
         events = list(
             session.scalars(
                 select(TaskEvent)
+                .join(Task, Task.task_id == TaskEvent.task_id)
                 .where(
+                    Task.tenant_id == tenant_id,
                     TaskEvent.task_id == task_id,
                     TaskEvent.event_id > after_event_id,
                     TaskEvent.event_type.in_(_SSE_EVENT_TYPES),

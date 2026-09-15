@@ -39,7 +39,7 @@ CLI 会使用 Playwright Chromium 访问目标页面，把渲染后的 DOM（按
 - `--headed`：以有界面模式运行 Chromium；默认无头。
 - `--tenant-id`、`--task-id`、`--task-item-id`：写入可选的关联标识。
 
-环境变量模板见根目录示例环境文件；本地覆盖文件由配置自动读取。可用变量为 `MONGODB_URI`、`MONGODB_DATABASE`、`MONGODB_DOM_COLLECTION`、`CRAWLER_OUTPUT_DIR`、`CRAWLER_TIMEOUT_MS`、`CRAWLER_HEADLESS`。
+环境变量模板见根目录示例环境文件；本地覆盖文件由配置自动读取。后端配置变量包括 `DATABASE_URL`、`REDIS_URL`、`AUTH_MODE`、`DEV_TENANT_ID`；爬虫配置变量包括 `MONGODB_URI`、`MONGODB_DATABASE`、`MONGODB_DOM_COLLECTION`、`CRAWLER_OUTPUT_DIR`、`CRAWLER_TIMEOUT_MS`、`CRAWLER_HEADLESS`。
 
 ## 测试
 
@@ -72,4 +72,4 @@ backend/
 └── tests/               # pytest（离线契约测试）
 ```
 
-MongoDB 爬虫持久化已接入，但 PostgreSQL 仍是任务、评论、报告、证据和事件的业务事实源。PostgreSQL 连接、Alembic 迁移、Celery Worker、outbox 派发器和 LangGraph 图尚未接入；`/health` 在真实探针实施前保持 `degraded`。
+MongoDB 爬虫持久化已接入，PostgreSQL 是任务、评论、报告、证据和事件的业务事实源。任务创建、列表、快照、取消、重试、报告、证据和 SSE 传输层已接入，初始 Alembic 迁移会创建业务表。Celery Worker、outbox 派发器和 LangGraph 图尚未接入，因此任务创建后没有执行者写入后续节点或报告，会保持 `QUEUED`；`/health` 在真实探针实施前仍保持 `degraded`。

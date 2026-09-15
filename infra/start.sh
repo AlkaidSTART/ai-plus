@@ -31,7 +31,7 @@ if ! docker compose -f "$COMPOSE_FILE" up -d --build --wait --wait-timeout "$STA
   echo "如需放宽健康等待上限，可通过 STARTUP_TIMEOUT 调整（当前值：${STARTUP_TIMEOUT} 秒）。" >&2
   docker compose -f "$COMPOSE_FILE" ps >&2 || true
   echo "查看状态：docker compose -f \"$COMPOSE_FILE\" ps" >&2
-  echo "查看日志：docker compose -f \"$COMPOSE_FILE\" logs api web db redis" >&2
+  echo "查看日志：docker compose -f \"$COMPOSE_FILE\" logs migrate api web db redis" >&2
   exit 1
 fi
 

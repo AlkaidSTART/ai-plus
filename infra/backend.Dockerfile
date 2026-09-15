@@ -17,6 +17,8 @@ COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY backend/src ./src
+COPY backend/alembic.ini ./
+COPY backend/migrations ./migrations
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000

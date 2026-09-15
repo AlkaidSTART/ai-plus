@@ -1,5 +1,11 @@
 name: insightx
 
+x-backend-environment: &backend-environment
+  DATABASE_URL: postgresql+psycopg://insightx:${POSTGRES_PASSWORD:-insightx-dev}@db:5432/insightx
+  REDIS_URL: redis://redis:6379/0
+  AUTH_MODE: dev
+  DEV_TENANT_ID: dev-tenant
+
 services:
   db:
     image: pgvector/pgvector:pg18
@@ -30,10 +36,21 @@ services:
       retries: 10
       start_period: 5s
 
+  migrate:
+    image: insightx-api:local
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-environment
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
+    image: insightx-api:local
     build:
       context: ..
       dockerfile: infra/backend.Dockerfile
+    environment: *backend-environment
     restart: unless-stopped
     expose:
       - "8000"
@@ -42,6 +59,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
