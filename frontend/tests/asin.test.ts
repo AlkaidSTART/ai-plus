@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'bun:test'
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
 
 const USER_EXAMPLE_URL =
   'https://www.amazon.com/Project-Cloud-Mens-Shoes-Lightweight/dp/B0FFW9LG7S/ref=trend_26_fall_ntos_grid?pf_rd_p=ec890b45-d55a-49b8-85e2-fa63c8255d5e&pf_rd_r=C9KT38048G6JX1QFHRT7&sr=1-2-a3f25ed3-e18f-4f84-9636-46feea37aaed&th=1&psc=1'
@@ -41,7 +42,7 @@ function extractAsinsClient(text: string): string[] {
 describe('Frontend ASIN extraction', () => {
   it('extracts ASIN from user example Amazon URL', () => {
     const res = extractAsinsClient(USER_EXAMPLE_URL)
-    expect(res).toEqual(['B0FFW9LG7S'])
+    assert.deepEqual(res, ['B0FFW9LG7S'])
   })
 
   it('extracts multiple ASINs and URLs deduplicated', () => {
@@ -52,16 +53,16 @@ describe('Frontend ASIN extraction', () => {
       B0FFW9LG7S
     `
     const res = extractAsinsClient(input)
-    expect(res).toEqual(['B0FFW9LG7S', 'B0D5N57SHS', 'B0052TBWM4'])
+    assert.deepEqual(res, ['B0FFW9LG7S', 'B0D5N57SHS', 'B0052TBWM4'])
   })
 
   it('handles query param asin=', () => {
     const res = extractAsinsClient('https://www.amazon.com/item?asin=B0CL4XJCJW')
-    expect(res).toEqual(['B0CL4XJCJW'])
+    assert.deepEqual(res, ['B0CL4XJCJW'])
   })
 
   it('ignores invalid text', () => {
     const res = extractAsinsClient('not an asin, random words, 12345')
-    expect(res).toEqual([])
+    assert.deepEqual(res, [])
   })
 })
