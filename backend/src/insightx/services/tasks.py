@@ -555,13 +555,20 @@ def create_task(
                     request_hash=request_hash,
                 )
 
+            target_asins = list(request.asins)
+            if not target_asins and request.keyword:
+                from insightx.services.search import search_amazon_products_sync
+
+                products = search_amazon_products_sync(request.keyword, limit=10)
+                target_asins = [p["asin"] for p in products if p.get("asin")]
+
             task, _ = _persist_task(
                 session,
                 tenant_id=tenant_id,
                 platform=request.platform,
                 marketplace=request.marketplace,
                 window_preset=request.window.preset,
-                asins=request.asins,
+                asins=target_asins,
                 parent_task_id=None,
             )
             session.add(

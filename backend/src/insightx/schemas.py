@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
 
 
 def serialize_utc_datetime(value: datetime) -> str:
@@ -83,21 +83,37 @@ class TaskWindow(StrictModel):
 class TaskCreateRequest(StrictModel):
     """Request body for creating a task batch."""
 
-    asins: list[str] = Field(min_length=1, max_length=10)
-    platform: Literal["amazon"]
-    marketplace: Literal["US"]
+    asins: list[str] = Field(default_factory=list, max_length=10)
+    keyword: str | None = Field(default=None, max_length=200)
+    platform: Literal["amazon"] = "amazon"
+    marketplace: Literal["US"] = "US"
     window: TaskWindow
 
     @field_validator("asins", mode="before")
     @classmethod
     def normalize_asins(cls, asins: Any) -> Any:
-        """Uppercase and deduplicate ASINs while preserving first-use order."""
+        """Extract, uppercase, and deduplicate ASINs while preserving first-use order."""
 
+        if asins is None:
+            return []
         if not isinstance(asins, list):
             return asins
         if not all(isinstance(asin, str) for asin in asins):
             return asins
-        normalized = list(dict.fromkeys(asin.upper() for asin in asins))
+
+        from insightx.services.asin import extract_asin
+
+        normalized: list[str] = []
+        for raw in asins:
+            asin = extract_asin(raw)
+            if asin:
+                if asin not in normalized:
+                    normalized.append(asin)
+            else:
+                raw_upper = raw.strip().upper()
+                if raw_upper not in normalized:
+                    normalized.append(raw_upper)
+
         invalid = [
             asin
             for asin in normalized
@@ -106,6 +122,48 @@ class TaskCreateRequest(StrictModel):
         if invalid:
             raise ValueError("ASIN must match ^[A-Z0-9]{10}$")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_inputs(self) -> Self:
+        if not self.asins and not (self.keyword and self.keyword.strip()):
+            raise ValueError("Either asins or keyword must be provided")
+        return self
+
+
+class ExtractAsinsRequest(StrictModel):
+    """Request body for extracting ASINs from text or URLs."""
+
+    text: str | None = None
+    urls: list[str] = Field(default_factory=list)
+
+
+class ExtractAsinsResponse(StrictModel):
+    """Response body containing extracted ASINs."""
+
+    asins: list[str]
+
+
+class ProductItem(StrictModel):
+    """Product summary item."""
+
+    asin: str
+    title: str
+    rating: float | None = None
+    url: str
+
+
+class SearchProductsRequest(StrictModel):
+    """Request body for searching products by keyword."""
+
+    keyword: str = Field(min_length=1, max_length=200)
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class SearchProductsResponse(StrictModel):
+    """Response body with search products results."""
+
+    keyword: str
+    products: list[ProductItem]
 
 
 class RetryTaskRequest(StrictModel):

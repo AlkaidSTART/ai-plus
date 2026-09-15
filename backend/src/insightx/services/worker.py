@@ -36,6 +36,8 @@ from insightx.schemas import (
     EvidenceSourceType,
     FinancialState,
     NodeStatus,
+    ReportPainPoint,
+    ReportProposal,
     TaskStatus,
 )
 
@@ -584,7 +586,9 @@ def _parse_review_node(
     }
 
 
-def _extract_reviews(dom: DomNode) -> tuple[list[dict[str, Any]], int]:
+def _extract_reviews(
+    dom: DomNode, *, limit: int = 10
+) -> tuple[list[dict[str, Any]], int]:
     raw_nodes = [
         node
         for node in _iter_elements(dom)
@@ -592,6 +596,7 @@ def _extract_reviews(dom: DomNode) -> tuple[list[dict[str, Any]], int]:
     ]
     reviews: list[dict[str, Any]] = []
     seen_refs: set[str] = set()
+    seen_hashes: set[str] = set()
     excluded_count = 0
     for index, node in enumerate(raw_nodes, start=1):
         parsed = _parse_review_node(node, index=index)
@@ -599,10 +604,16 @@ def _extract_reviews(dom: DomNode) -> tuple[list[dict[str, Any]], int]:
             excluded_count += 1
             continue
         source_ref = str(parsed["source_ref"])
-        if source_ref in seen_refs:
+        body = str(parsed.get("excerpt", "")).strip()
+        body_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        if source_ref in seen_refs or body_hash in seen_hashes:
+            excluded_count += 1
+            continue
+        if len(reviews) >= limit:
             excluded_count += 1
             continue
         seen_refs.add(source_ref)
+        seen_hashes.add(body_hash)
         parsed["raw_index"] = index
         reviews.append(parsed)
     return reviews, excluded_count
@@ -694,7 +705,7 @@ def _replace_evidence(
     request_url: str,
     final_url: str,
     page_classification: str,
-) -> None:
+) -> list[str]:
     evidence_ids = list(
         session.scalars(
             select(Evidence.evidence_id).where(
@@ -711,10 +722,13 @@ def _replace_evidence(
         )
         session.execute(delete(Evidence).where(Evidence.evidence_id.in_(evidence_ids)))
 
+    created_ids: list[str] = []
     for review in reviews:
+        ev_id = review.get("evidence_id") or _new_id("evd")
+        created_ids.append(ev_id)
         session.add(
             Evidence(
-                evidence_id=_new_id("evd"),
+                evidence_id=ev_id,
                 tenant_id=task.tenant_id,
                 task_id=task.task_id,
                 item_id=item.item_id,
@@ -738,6 +752,7 @@ def _replace_evidence(
                 created_at=utc_now(),
             )
         )
+    return created_ids
 
 
 def _persist_report(
@@ -749,6 +764,8 @@ def _persist_report(
     warnings: list[dict[str, Any]],
     model_metadata: dict[str, Any],
     data_quality: DataQuality,
+    pain_points: list[ReportPainPoint] | None = None,
+    proposals: list[ReportProposal] | None = None,
 ) -> None:
     now = utc_now()
     report = session.scalar(
@@ -757,13 +774,15 @@ def _persist_report(
             Report.item_id == item.item_id,
         )
     )
+    dumped_pain_points = [p.model_dump(mode="json") for p in (pain_points or [])]
+    dumped_proposals = [p.model_dump(mode="json") for p in (proposals or [])]
     values: dict[str, Any] = {
         "data_quality": data_quality.value,
         "sample_metrics": sample_metrics,
         "generated_at": now,
         "financial_state": FinancialState.NOT_EVALUATED.value,
-        "pain_points": [],
-        "proposals": [],
+        "pain_points": dumped_pain_points,
+        "proposals": dumped_proposals,
         "warnings": warnings,
         "model_metadata": model_metadata,
     }
@@ -780,6 +799,36 @@ def _persist_report(
     else:
         for key, value in values.items():
             setattr(report, key, value)
+
+    # Persist claim references
+    seen_refs: set[tuple[str, str]] = set()
+    if pain_points:
+        for p in pain_points:
+            for ev_id in p.evidence_refs:
+                pair = (ev_id, p.pain_point_id)
+                if pair not in seen_refs:
+                    seen_refs.add(pair)
+                    session.add(
+                        EvidenceClaimRef(
+                            evidence_id=ev_id,
+                            claim_id=p.pain_point_id,
+                            claim_type="PAIN_POINT",
+                        )
+                    )
+    if proposals:
+        for prop in proposals:
+            for ev_id in prop.evidence_refs:
+                pair = (ev_id, prop.proposal_id)
+                if pair not in seen_refs:
+                    seen_refs.add(pair)
+                    session.add(
+                        EvidenceClaimRef(
+                            evidence_id=ev_id,
+                            claim_id=prop.proposal_id,
+                            claim_type="PROPOSAL",
+                        )
+                    )
+
     item.data_quality = data_quality.value
     item.sample_metrics = sample_metrics
     item.error = None
@@ -973,46 +1022,43 @@ def execute_task_pipeline(
                 )
 
             reviews, excluded_review_count = _extract_reviews(page.dom)
+            for r in reviews:
+                r["evidence_id"] = _new_id("evd")
             valid_review_count = len(reviews)
             raw_review_count = valid_review_count + excluded_review_count
             missing_reasons = ["NO_RAW_REVIEWS"] if raw_review_count == 0 else []
-            if raw_review_count > 0:
-                missing_reasons.append("MODEL_NOT_CONFIGURED")
             sample_metrics = _sample_metrics(
                 window_preset=task_window_preset,
                 reviews=reviews,
                 excluded_review_count=excluded_review_count,
                 missing_reasons=missing_reasons,
             )
-            warnings: list[dict[str, Any]] = [
-                {
-                    "code": (
-                        "NO_RAW_REVIEWS"
-                        if raw_review_count == 0
-                        else "MODEL_NOT_CONFIGURED"
-                    ),
-                    "message": (
-                        "Amazon 商品页未返回可验证的原始评论文本；"
-                        "未使用 Customers say 摘要替代证据。"
-                        if raw_review_count == 0
-                        else "未配置嵌入与聚类模型，仅保留原始评论证据，"
-                        "不生成未经模型验证的痛点与提案。"
-                    ),
-                    "related_item_id": item.item_id,
-                    "evidence_refs": None,
-                }
-            ]
+            warnings: list[dict[str, Any]] = (
+                [
+                    {
+                        "code": "NO_RAW_REVIEWS",
+                        "message": (
+                            "Amazon 商品页未返回可验证的原始评论文本；"
+                            "未使用 Customers say 摘要替代证据。"
+                        ),
+                        "related_item_id": item.item_id,
+                        "evidence_refs": None,
+                    }
+                ]
+                if raw_review_count == 0
+                else []
+            )
             data_quality = (
-                DataQuality.NO_DATA if raw_review_count == 0 else DataQuality.PARTIAL
+                DataQuality.NO_DATA if raw_review_count == 0 else DataQuality.SUFFICIENT
             )
             model_metadata: dict[str, Any] = {
-                "engine": "deterministic_worker",
-                "models": [],
-                "model_skip_reason": (
-                    "NO_RAW_REVIEWS"
+                "engine": "insightx_analysis_engine",
+                "models": (
+                    []
                     if raw_review_count == 0
-                    else "MODEL_NOT_CONFIGURED"
+                    else ["semantic_clustering", "dual_column_proposal_mapper"]
                 ),
+                "model_skip_reason": "NO_RAW_REVIEWS" if raw_review_count == 0 else None,
                 "capture": {
                     "request_url": request_url,
                     "final_url": page.final_url,
@@ -1021,6 +1067,8 @@ def execute_task_pipeline(
                     "extracted_review_count": raw_review_count,
                 },
             }
+            pain_points: list[ReportPainPoint] = []
+            proposals: list[ReportProposal] = []
 
             with session_factory() as session:
                 with session.begin():
@@ -1093,29 +1141,61 @@ def execute_task_pipeline(
                             details={"valid_review_count": valid_review_count},
                         )
                         current_node = None
-                        for skipped_id, skipped_name, reason in (
-                            (
-                                "cluster_pain_points",
-                                "高频痛点聚类",
-                                "MODEL_NOT_CONFIGURED",
-                            ),
-                            (
-                                "generate_proposals",
-                                "生成双栏改款建议",
-                                "NO_PAIN_POINTS",
-                            ),
-                        ):
-                            skipped_started_at = utc_now()
-                            _finish_node(
-                                session,
-                                task_id=task_id,
-                                item_id=item.item_id,
-                                node_id=skipped_id,
-                                node_name=skipped_name,
-                                status=NodeStatus.SKIPPED,
-                                started_at=skipped_started_at,
-                                skip_reason=reason,
+
+                        # Node 2: Cluster Pain Points
+                        node_id, node_name = _PIPELINE_NODES[2]
+                        started_at = _start_node(
+                            session,
+                            task_id=task_id,
+                            item_id=item.item_id,
+                            node_id=node_id,
+                            node_name=node_name,
+                        )
+                        current_node = (item.item_id, node_id, node_name, started_at)
+                        from insightx.services.analysis import analyze_reviews
+
+                        evidence_ids = [r["evidence_id"] for r in reviews]
+                        pain_points, proposals, data_quality, sample_metrics = (
+                            analyze_reviews(
+                                reviews,
+                                evidence_ids=evidence_ids,
+                                window_preset=task_window_preset,
+                                excluded_count=excluded_review_count,
                             )
+                        )
+                        _finish_node(
+                            session,
+                            task_id=task_id,
+                            item_id=item.item_id,
+                            node_id=node_id,
+                            node_name=node_name,
+                            status=NodeStatus.SUCCESS,
+                            started_at=current_node[3],
+                            details={"pain_point_count": len(pain_points)},
+                        )
+                        current_node = None
+
+                        # Node 3: Generate Proposals
+                        node_id, node_name = _PIPELINE_NODES[3]
+                        started_at = _start_node(
+                            session,
+                            task_id=task_id,
+                            item_id=item.item_id,
+                            node_id=node_id,
+                            node_name=node_name,
+                        )
+                        current_node = (item.item_id, node_id, node_name, started_at)
+                        _finish_node(
+                            session,
+                            task_id=task_id,
+                            item_id=item.item_id,
+                            node_id=node_id,
+                            node_name=node_name,
+                            status=NodeStatus.SUCCESS,
+                            started_at=current_node[3],
+                            details={"proposal_count": len(proposals)},
+                        )
+                        current_node = None
 
                     node_id, node_name = _PIPELINE_NODES[4]
                     started_at = _start_node(
@@ -1157,6 +1237,8 @@ def execute_task_pipeline(
                         warnings=warnings,
                         model_metadata=model_metadata,
                         data_quality=data_quality,
+                        pain_points=pain_points,
+                        proposals=proposals,
                     )
                     _finish_node(
                         session,

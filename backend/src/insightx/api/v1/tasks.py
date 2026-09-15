@@ -19,11 +19,16 @@ from insightx.dependencies import IdempotencyKey, LimitQuery, get_tenant_id
 from insightx.schemas import (
     EvidenceResponse,
     EvidenceSourceType,
+    ExtractAsinsRequest,
+    ExtractAsinsResponse,
     FinancialEvaluateRequest,
     FinancialEvaluateResponse,
     Page,
+    ProductItem,
     ReportResponse,
     RetryTaskRequest,
+    SearchProductsRequest,
+    SearchProductsResponse,
     SuccessEnvelope,
     TaskCreatedResponse,
     TaskCreateRequest,
@@ -35,6 +40,40 @@ from insightx.services import financial as financial_svc
 from insightx.services import tasks as task_svc
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@router.post("/extract-asins")
+def extract_asins_endpoint(
+    body: ExtractAsinsRequest,
+) -> SuccessEnvelope[ExtractAsinsResponse]:
+    from insightx.services.asin import extract_asins
+
+    raw_text = body.text or ""
+    if body.urls:
+        raw_text += " " + " ".join(body.urls)
+    asins = extract_asins(raw_text, limit=10)
+    return SuccessEnvelope(data=ExtractAsinsResponse(asins=asins))
+
+
+@router.post("/search-products")
+async def search_products_endpoint(
+    body: SearchProductsRequest,
+) -> SuccessEnvelope[SearchProductsResponse]:
+    from insightx.services.search import search_amazon_products
+
+    products = await search_amazon_products(body.keyword, limit=body.limit)
+    product_items = [
+        ProductItem(
+            asin=p["asin"],
+            title=p["title"],
+            rating=p.get("rating"),
+            url=p["url"],
+        )
+        for p in products
+    ]
+    return SuccessEnvelope(
+        data=SearchProductsResponse(keyword=body.keyword, products=product_items)
+    )
 
 
 @router.post("", status_code=202)
