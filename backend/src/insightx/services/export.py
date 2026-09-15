@@ -10,9 +10,9 @@ from typing import Any
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.shared import Inches, Pt, RGBColor
-import openpyxl
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
+import openpyxl  # type: ignore[import-untyped]
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side  # type: ignore[import-untyped]
+from openpyxl.utils import get_column_letter  # type: ignore[import-untyped]
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

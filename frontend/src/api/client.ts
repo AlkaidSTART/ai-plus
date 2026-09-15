@@ -4,6 +4,9 @@
  */
 import type {
   EvidenceResponse,
+  FinancialEvaluateRequest,
+  FinancialEvaluateResponse,
+  FinancialRuleInfo,
   HealthResponse,
   ListEvidenceParams,
   ListTasksParams,
@@ -185,3 +188,46 @@ export function listEvidence(
     { signal },
   )
 }
+
+export function getFinancialRules(signal?: AbortSignal) {
+  return request<FinancialRuleInfo>('/api/v1/financial/rules', { signal })
+}
+
+export function evaluateFinancial(
+  body: FinancialEvaluateRequest,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>('/api/v1/financial/evaluate', {
+    method: 'POST',
+    signal,
+    ...jsonRequest(body),
+  })
+}
+
+export function getTaskItemFinancial(
+  taskId: string,
+  itemId: string,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/financial`,
+    { signal },
+  )
+}
+
+export function evaluateTaskItemFinancial(
+  taskId: string,
+  itemId: string,
+  body: FinancialEvaluateRequest,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/financial`,
+    {
+      method: 'POST',
+      signal,
+      ...jsonRequest(body),
+    },
+  )
+}
+

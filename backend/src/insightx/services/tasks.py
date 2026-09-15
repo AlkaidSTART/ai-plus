@@ -29,6 +29,7 @@ from insightx.models import (
     utc_now,
 )
 from insightx.services.export import export_task_charter_zip
+from insightx.schemas import (
     DataQuality,
     EvidenceResponse,
     EvidenceSourceType,
