@@ -95,9 +95,7 @@ class TaskEvent(Base):
         Index("ix_task_events_task_item_event", "task_item_id", "event_id"),
     )
 
-    event_id: Mapped[int] = mapped_column(
-        BigInteger, Identity(), primary_key=True
-    )
+    event_id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     task_id: Mapped[str] = mapped_column(
         ForeignKey("tasks.task_id", ondelete="CASCADE"), nullable=False
     )
@@ -183,9 +181,7 @@ class EvidenceClaimRef(Base):
     """Many-to-many mapping between evidence and report claims."""
 
     __tablename__ = "evidence_claim_refs"
-    __table_args__ = (
-        Index("ix_evidence_claim_refs_claim", "claim_id", "evidence_id"),
-    )
+    __table_args__ = (Index("ix_evidence_claim_refs_claim", "claim_id", "evidence_id"),)
 
     evidence_id: Mapped[str] = mapped_column(
         ForeignKey("evidence.evidence_id", ondelete="CASCADE"), primary_key=True
@@ -234,6 +230,10 @@ class OutboxMessage(Base):
         DateTime(timezone=True), nullable=False, default=utc_now
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

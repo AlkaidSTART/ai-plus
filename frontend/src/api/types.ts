@@ -26,10 +26,39 @@ export interface TaskWindow {
 }
 
 export interface TaskCreateRequest {
-  asins: string[]
+  asins?: string[]
+  keyword?: string | null
   platform: 'amazon'
   marketplace: 'US'
   window: TaskWindow
+}
+
+export interface ExtractAsinsRequest {
+  text: string
+}
+
+export interface ExtractAsinsResponse {
+  asins: string[]
+}
+
+export interface ProductItem {
+  asin: string
+  title: string
+  url: string
+  price: string | null
+  rating: number | null
+  review_count: number | null
+  image_url: string | null
+}
+
+export interface SearchProductsRequest {
+  keyword: string
+  limit?: number
+}
+
+export interface SearchProductsResponse {
+  keyword: string
+  products: ProductItem[]
 }
 
 export interface RetryTaskRequest {
@@ -198,3 +227,162 @@ export interface ListEvidenceParams {
 export function isTerminalTaskStatus(status: TaskStatus | null | undefined): boolean {
   return status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELED'
 }
+
+export interface FinancialEvaluateRequest {
+  mold_cost?: number
+  sample_cost?: number
+  moq?: number
+  unit_product_cost?: number
+  expected_sales_price?: number
+  shipping_cost_per_unit?: number
+  monthly_estimated_sales?: number
+  target_payback_months?: number
+  category_half_life_months?: number
+  max_cash_budget?: number
+  currency?: 'USD'
+  rule_version?: string
+  task_id?: string | null
+  item_id?: string | null
+}
+
+export interface FinancialMetrics {
+  fixed_costs: number
+  variable_cost_per_unit: number
+  unit_contribution_margin: number
+  gross_margin_rate: number
+  initial_batch_cash: number
+  amortized_mold_cost_per_unit: number
+  mold_cost_ratio: number
+  monthly_contribution: number
+  break_even_units: number | null
+  payback_months: number
+  estimated_12m_roi: number
+}
+
+export interface BreakEvenPoint {
+  month: number
+  cumulative_units: number
+  cumulative_revenue: number
+  cumulative_cost: number
+  net_cashflow: number
+  is_break_even: boolean
+}
+
+export interface SensitivityPoint {
+  sales_change_percent: number
+  price_change_percent: number
+  payback_months: number
+  is_vetoed: boolean
+}
+
+export interface AlternativeSuggestion {
+  suggestion_id: string
+  title: string
+  description: string
+  estimated_impact: string
+  suggested_params: Partial<FinancialEvaluateRequest>
+}
+
+export interface FinancialEvaluateResponse {
+  financial_state: FinancialState
+  circuit_breaker_triggered: boolean
+  rule_version: string
+  currency: string
+  evaluated_at: string
+  reasons: string[]
+  triggered_rules: string[]
+  metrics: FinancialMetrics | null
+  break_even_timeline: BreakEvenPoint[]
+  sensitivity_matrix: SensitivityPoint[]
+  alternative_suggestions: AlternativeSuggestion[]
+  applied_assumptions: Record<string, unknown>
+}
+
+export interface FinancialRuleItem {
+  code: string
+  name: string
+  description: string
+  threshold: string
+}
+
+export interface FinancialRuleInfo {
+  rule_version: string
+  rules: FinancialRuleItem[]
+}
+
+export interface BsrHistoryPoint {
+  timestamp: string
+  bsr: number
+  sub_bsr?: number | null
+  price: number
+  buy_box: boolean
+}
+
+export interface CompetitorBsrItem {
+  asin: string
+  title: string
+  category: string
+  subcategory?: string | null
+  current_bsr: number
+  current_sub_bsr?: number | null
+  bsr_change_7d: number
+  current_price: number
+  currency: string
+  buy_box_ratio: number
+  buy_box_winner: string
+  rating: number
+  review_count: number
+  history: BsrHistoryPoint[]
+}
+
+export interface BsrTrendsResponse {
+  items: CompetitorBsrItem[]
+  updated_at: string
+}
+
+export type CrossPlatformChannel = 'TIKTOK' | 'TEMU'
+export type CrossPlatformMatchStatus = 'MATCHED' | 'PENDING' | 'VARIANT'
+
+export interface CrossPlatformItem {
+  id: string
+  target_asin: string
+  target_title: string
+  target_price: number
+  platform: CrossPlatformChannel
+  platform_sku: string
+  platform_title: string
+  platform_url: string
+  platform_price: number
+  estimated_fees: number
+  estimated_spread: number
+  match_score: number
+  match_status: CrossPlatformMatchStatus
+  monthly_sales: number
+  updated_at: string
+}
+
+export interface CrossPlatformMetrics {
+  total_skus: number
+  avg_match_score: number
+  max_spread: number
+  arbitrage_opportunities: number
+}
+
+export interface CrossPlatformResponse {
+  metrics: CrossPlatformMetrics
+  items: CrossPlatformItem[]
+}
+
+export interface ListBsrTrendsParams {
+  task_id?: string
+  asin?: string
+  days?: number
+}
+
+export interface ListCrossPlatformParams {
+  asin?: string
+  platform?: string
+  status?: string
+}
+
+

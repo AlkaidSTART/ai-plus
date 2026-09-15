@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from insightx.crawler.dom import DOM_SERIALIZER_SCRIPT, DomNode
+from insightx.crawler.dom import DomNode
 from insightx.crawler.fetch import fetch_with_playwright
 
 
@@ -26,11 +26,17 @@ def build_playwright(
     page = MagicMock()
     page.url = "https://example.com/final"
     page.goto = AsyncMock(return_value=response)
-    page.evaluate = AsyncMock(return_value=sample_dom() if dom is None else dom)
+    # evaluate is called twice: first for review-scroll (returns int),
+    # then for DOM serialization (returns the dom dict).
+    dom_result = sample_dom() if dom is None else dom
+    page.evaluate = AsyncMock(side_effect=[0, dom_result])
     page.title = AsyncMock(return_value="Captured page")
+    page.wait_for_timeout = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
 
     context = MagicMock()
     context.new_page = AsyncMock(return_value=page)
+    context.add_init_script = AsyncMock()
     context.close = AsyncMock()
 
     browser = MagicMock()
@@ -56,17 +62,16 @@ async def test_fetch_with_playwright_captures_rendered_values_and_closes() -> No
         headless=False,
     )
 
-    chromium.launch.assert_awaited_once_with(headless=False)
-    browser.new_context.assert_awaited_once_with()
+    chromium.launch.assert_awaited_once()
+    browser.new_context.assert_awaited_once()
+    context.add_init_script.assert_awaited_once()
     context.new_page.assert_awaited_once_with()
     context.new_page.return_value.goto.assert_awaited_once_with(
         "https://example.com/start",
         wait_until="domcontentloaded",
         timeout=12_345,
     )
-    context.new_page.return_value.evaluate.assert_awaited_once_with(
-        DOM_SERIALIZER_SCRIPT
-    )
+    assert context.new_page.return_value.evaluate.await_count == 2
     context.new_page.return_value.title.assert_awaited_once_with()
     assert fetched.source_url == "https://example.com/start"
     assert fetched.final_url == "https://example.com/final"

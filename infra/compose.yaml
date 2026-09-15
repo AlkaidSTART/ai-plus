@@ -91,6 +91,19 @@ services:
       retries: 5
       start_period: 5s
 
+  worker:
+    image: insightx-api:local
+    command: ["python", "-m", "insightx.worker"]
+    environment: *backend-environment
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   db_data:
   redis_data:

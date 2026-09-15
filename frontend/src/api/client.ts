@@ -3,12 +3,21 @@
  * Vite forwards `/api` to the backend in development.
  */
 import type {
+  BsrTrendsResponse,
+  CrossPlatformResponse,
   EvidenceResponse,
+  ExtractAsinsResponse,
+  FinancialEvaluateRequest,
+  FinancialEvaluateResponse,
+  FinancialRuleInfo,
   HealthResponse,
+  ListBsrTrendsParams,
+  ListCrossPlatformParams,
   ListEvidenceParams,
   ListTasksParams,
   Page,
   ReportResponse,
+  SearchProductsResponse,
   TaskCreatedResponse,
   TaskCreateRequest,
   TaskListItem,
@@ -104,6 +113,22 @@ export function getHealth(signal?: AbortSignal) {
   return request<HealthResponse>('/api/v1/health', { signal })
 }
 
+export function extractAsins(text: string, signal?: AbortSignal) {
+  return request<ExtractAsinsResponse>('/api/v1/tasks/extract-asins', {
+    method: 'POST',
+    signal,
+    ...jsonRequest({ text }),
+  })
+}
+
+export function searchProducts(keyword: string, limit = 10, signal?: AbortSignal) {
+  return request<SearchProductsResponse>('/api/v1/tasks/search-products', {
+    method: 'POST',
+    signal,
+    ...jsonRequest({ keyword, limit }),
+  })
+}
+
 export function createTask(
   body: TaskCreateRequest,
   idempotencyKey: string,
@@ -185,3 +210,88 @@ export function listEvidence(
     { signal },
   )
 }
+
+export function getFinancialRules(signal?: AbortSignal) {
+  return request<FinancialRuleInfo>('/api/v1/financial/rules', { signal })
+}
+
+export function evaluateFinancial(
+  body: FinancialEvaluateRequest,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>('/api/v1/financial/evaluate', {
+    method: 'POST',
+    signal,
+    ...jsonRequest(body),
+  })
+}
+
+export function getTaskItemFinancial(
+  taskId: string,
+  itemId: string,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/financial`,
+    { signal },
+  )
+}
+
+export function evaluateTaskItemFinancial(
+  taskId: string,
+  itemId: string,
+  body: FinancialEvaluateRequest,
+  signal?: AbortSignal,
+) {
+  return request<FinancialEvaluateResponse>(
+    `/api/v1/tasks/${encodeURIComponent(taskId)}/items/${encodeURIComponent(itemId)}/financial`,
+    {
+      method: 'POST',
+      signal,
+      ...jsonRequest(body),
+    },
+  )
+}
+
+export async function exportTask(taskId: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await fetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/export`, { signal })
+  if (!res.ok) {
+    const text = await res.text()
+    let message = '导出工程任务书失败'
+    try {
+      const body = JSON.parse(text)
+      if (body?.error?.message) {
+        message = body.error.message
+      }
+    } catch {
+      // fallback
+    }
+    throw new ApiError(res.status, 'EXPORT_FAILED', message)
+  }
+  return res.blob()
+}
+
+export function getBsrTrends(params: ListBsrTrendsParams = {}, signal?: AbortSignal) {
+  return request<BsrTrendsResponse>(
+    withQuery('/api/v1/radar/bsr-trends', {
+      task_id: params.task_id,
+      asin: params.asin,
+      days: params.days,
+    }),
+    { signal },
+  )
+}
+
+export function getCrossPlatform(params: ListCrossPlatformParams = {}, signal?: AbortSignal) {
+  return request<CrossPlatformResponse>(
+    withQuery('/api/v1/radar/cross-platform', {
+      asin: params.asin,
+      platform: params.platform,
+      status: params.status,
+    }),
+    { signal },
+  )
+}
+
+
+

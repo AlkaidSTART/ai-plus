@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
@@ -17,9 +19,16 @@ from insightx.dependencies import IdempotencyKey, LimitQuery, get_tenant_id
 from insightx.schemas import (
     EvidenceResponse,
     EvidenceSourceType,
+    ExtractAsinsRequest,
+    ExtractAsinsResponse,
+    FinancialEvaluateRequest,
+    FinancialEvaluateResponse,
     Page,
+    ProductItem,
     ReportResponse,
     RetryTaskRequest,
+    SearchProductsRequest,
+    SearchProductsResponse,
     SuccessEnvelope,
     TaskCreatedResponse,
     TaskCreateRequest,
@@ -27,9 +36,44 @@ from insightx.schemas import (
     TaskSnapshot,
     TaskStatus,
 )
+from insightx.services import financial as financial_svc
 from insightx.services import tasks as task_svc
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@router.post("/extract-asins")
+def extract_asins_endpoint(
+    body: ExtractAsinsRequest,
+) -> SuccessEnvelope[ExtractAsinsResponse]:
+    from insightx.services.asin import extract_asins
+
+    raw_text = body.text or ""
+    if body.urls:
+        raw_text += " " + " ".join(body.urls)
+    asins = extract_asins(raw_text, limit=10)
+    return SuccessEnvelope(data=ExtractAsinsResponse(asins=asins))
+
+
+@router.post("/search-products")
+async def search_products_endpoint(
+    body: SearchProductsRequest,
+) -> SuccessEnvelope[SearchProductsResponse]:
+    from insightx.services.search import search_amazon_products
+
+    products = await search_amazon_products(body.keyword, limit=body.limit)
+    product_items = [
+        ProductItem(
+            asin=p["asin"],
+            title=p["title"],
+            rating=p.get("rating"),
+            url=p["url"],
+        )
+        for p in products
+    ]
+    return SuccessEnvelope(
+        data=SearchProductsResponse(keyword=body.keyword, products=product_items)
+    )
 
 
 @router.post("", status_code=202)
@@ -154,6 +198,31 @@ def list_evidence(
     return SuccessEnvelope(data=page)
 
 
+@router.get("/{task_id}/export")
+def export_task(
+    task_id: str,
+    tenant_id: str = Depends(get_tenant_id),
+    session: Session = Depends(get_session),  # noqa: B008
+) -> Response:
+    content, filename = task_svc.export_task_charter(
+        session,
+        tenant_id=tenant_id,
+        task_id=task_id,
+    )
+    ascii_filename = f"task_{task_id}_charter.zip"
+    quoted_filename = quote(filename)
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_filename}"; '
+                f"filename*=UTF-8''{quoted_filename}"
+            )
+        },
+    )
+
+
 @router.get("/{task_id}/events")
 async def task_events(
     task_id: str,
@@ -172,7 +241,7 @@ async def task_events(
         cursor=cursor,
     )
 
-    async def generate():  # noqa: ANN202
+    async def generate() -> AsyncIterator[str]:
         event_cursor = prepared_cursor
         last_frame_at = asyncio.get_running_loop().time()
         yield "retry: 3000\n\n"
@@ -209,3 +278,37 @@ async def task_events(
             await asyncio.sleep(0.5)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.get("/{task_id}/items/{item_id}/financial")
+def get_item_financial(
+    task_id: str,
+    item_id: str,
+    tenant_id: str = Depends(get_tenant_id),
+    session: Session = Depends(get_session),  # noqa: B008
+) -> SuccessEnvelope[FinancialEvaluateResponse]:
+    result = financial_svc.get_task_item_financial(
+        session,
+        tenant_id=tenant_id,
+        task_id=task_id,
+        item_id=item_id,
+    )
+    return SuccessEnvelope(data=result)
+
+
+@router.post("/{task_id}/items/{item_id}/financial")
+def evaluate_item_financial(
+    task_id: str,
+    item_id: str,
+    body: FinancialEvaluateRequest,
+    tenant_id: str = Depends(get_tenant_id),
+    session: Session = Depends(get_session),  # noqa: B008
+) -> SuccessEnvelope[FinancialEvaluateResponse]:
+    body.task_id = task_id
+    body.item_id = item_id
+    result = financial_svc.evaluate_financial_risk(
+        body,
+        session=session,
+        tenant_id=tenant_id,
+    )
+    return SuccessEnvelope(data=result)

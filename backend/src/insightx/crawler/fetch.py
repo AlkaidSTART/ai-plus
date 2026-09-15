@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -9,6 +12,7 @@ from typing import cast
 from playwright.async_api import (
     Browser,
     BrowserContext,
+    Page,
     Playwright,
     async_playwright,
 )
@@ -18,6 +22,95 @@ from insightx.crawler.dom import (
     DomNode,
     validate_dom_node,
 )
+
+logger = logging.getLogger(__name__)
+
+# ---------- browser fingerprint presets ----------
+
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+]
+
+_VIEWPORTS = [
+    {"width": 1920, "height": 1080},
+    {"width": 1536, "height": 864},
+    {"width": 1440, "height": 900},
+    {"width": 1366, "height": 768},
+]
+
+_DEFAULT_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0  # seconds, exponential backoff
+
+# ponytail: stealth — upgrade to playwright-stealth or browser-profile
+#   rotation when Amazon starts detecting the init_script approach.
+_STEALTH_INIT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+window.chrome = {runtime: {}};
+"""
+
+# JS snippet to scroll the Amazon review section into view and wait for
+# lazy-loaded review cards to appear.  Returns the count of reviews found
+# (0 means none loaded even after scrolling).
+_SCROLL_TO_REVIEWS_SCRIPT = """
+async () => {
+    // Step-scroll down to trigger IntersectionObservers for lazy-loaded widgets
+    const totalHeight = document.body.scrollHeight;
+    const steps = [0.35, 0.65, 0.85];
+    for (const ratio of steps) {
+        window.scrollTo(0, totalHeight * ratio);
+        await new Promise(r => setTimeout(r, 350));
+    }
+
+    const selectors = [
+        '#localTopReviewsList',
+        '#cm-cr-dp-review-list',
+        '[data-hook="reviews-medley-widget"]',
+        '#reviewsMedley',
+        '#customer-reviews-content',
+        '#customer-reviews_feature_div',
+    ];
+    let target = null;
+    for (const sel of selectors) {
+        target = document.querySelector(sel);
+        if (target) break;
+    }
+    if (target) {
+        target.scrollIntoView({behavior: 'instant', block: 'center'});
+    } else {
+        window.scrollTo(0, totalHeight);
+    }
+
+    // Wait up to 6s for review cards or aspect quote links to appear
+    const deadline = Date.now() + 6000;
+    while (Date.now() < deadline) {
+        const count = document.querySelectorAll(
+            '[data-hook="review"], #localTopReviewsList li, [data-testid="read-more"], a[href*="/customer-reviews/srp/"]'
+        ).length;
+        if (count > 0) return count;
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    // Second attempt: scroll See More / FocalReviews link if present
+    const seeMore = document.querySelector(
+        '[data-hook="see-all-reviews-link-foot"], '
+      + 'a[href*="product-reviews"], '
+      + '.cr-widget-FocalReviews a.a-link-emphasis'
+    );
+    if (seeMore) {
+        seeMore.scrollIntoView({behavior: 'instant', block: 'center'});
+        await new Promise(r => setTimeout(r, 1500));
+    }
+
+    return document.querySelectorAll(
+        '[data-hook="review"], #localTopReviewsList li, [data-testid="read-more"], a[href*="/customer-reviews/srp/"]'
+    ).length;
+}
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,16 +130,102 @@ async def fetch_dom(
     *,
     timeout_ms: int,
     headless: bool,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
 ) -> FetchedPage:
-    """Open one URL with Chromium and capture its rendered DOM."""
+    """Open one URL with Chromium and capture its rendered DOM.
 
-    async with async_playwright() as playwright:
-        return await fetch_with_playwright(
-            playwright,
-            url,
-            timeout_ms=timeout_ms,
-            headless=headless,
-        )
+    Retries transient failures (connection reset, timeout, bot check) with exponential
+    backoff and jitter.  Each attempt uses a fresh browser instance with
+    randomised fingerprint to reduce bot-detection risk.
+    """
+
+    last_error: BaseException | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with async_playwright() as playwright:
+                page = await fetch_with_playwright(
+                    playwright,
+                    url,
+                    timeout_ms=timeout_ms,
+                    headless=headless,
+                )
+                if page.http_status != 200:
+                    raise RuntimeError(f"HTTP {page.http_status} fetching {url}")
+
+                # Detect Amazon robot check / CAPTCHA page served with HTTP 200
+                is_amazon = "amazon." in page.final_url.lower() or "amazon." in url.lower()
+                if is_amazon:
+                    title_clean = page.title.strip().lower()
+                    if title_clean in {"amazon.com", "sorry! something went wrong!", ""}:
+                        raise RuntimeError(
+                            f"Amazon bot check / block page detected: title={page.title!r}"
+                        )
+                    if any(
+                        marker in title_clean
+                        for marker in ("captcha", "robot check", "automated access")
+                    ):
+                        raise RuntimeError(
+                            f"Amazon bot check / CAPTCHA detected: title={page.title!r}"
+                        )
+
+                return page
+        except Exception as exc:
+            last_error = exc
+            if attempt < max_retries:
+                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0)
+                logger.warning(
+                    "Fetch attempt %d/%d failed for %s: %s — retrying in %.1fs",
+                    attempt,
+                    max_retries,
+                    url,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    "Fetch attempt %d/%d failed for %s: %s — no retries left",
+                    attempt,
+                    max_retries,
+                    url,
+                    exc,
+                )
+    raise last_error  # type: ignore[misc]
+
+
+async def _create_stealth_context(
+    browser: Browser,
+) -> BrowserContext:
+    """Create a browser context with randomised fingerprint and stealth patches."""
+
+    ua = random.choice(_USER_AGENTS)
+    viewport = random.choice(_VIEWPORTS)
+    context = await browser.new_context(
+        user_agent=ua,
+        viewport=viewport,
+        locale="en-US",
+        timezone_id="America/New_York",
+        java_script_enabled=True,
+        extra_http_headers={
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Upgrade-Insecure-Requests": "1",
+        },
+    )
+    await context.add_init_script(_STEALTH_INIT_SCRIPT)
+    return context
+
+
+async def _scroll_for_reviews(page: Page) -> int:
+    """Scroll to the review section and return how many review cards loaded."""
+
+    try:
+        count = await page.evaluate(_SCROLL_TO_REVIEWS_SCRIPT)
+        return int(count) if isinstance(count, (int, float)) else 0
+    except Exception:
+        logger.debug("Review-scroll script raised; continuing with current DOM")
+        return 0
 
 
 async def fetch_with_playwright(
@@ -61,9 +240,19 @@ async def fetch_with_playwright(
     browser: Browser | None = None
     context: BrowserContext | None = None
     try:
-        browser = await playwright.chromium.launch(headless=headless)
-        context = await browser.new_context()
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ]
+        browser = await playwright.chromium.launch(
+            headless=headless,
+            args=launch_args,
+        )
+        context = await _create_stealth_context(browser)
         page = await context.new_page()
+
         response = await page.goto(
             url,
             wait_until="domcontentloaded",
@@ -71,6 +260,26 @@ async def fetch_with_playwright(
         )
         if response is None:
             raise RuntimeError(f"navigation returned no response for {url}")
+
+        # Wait for full network idle — catches XHR-loaded review widgets
+        try:
+            await page.wait_for_load_state("networkidle", timeout=8_000)
+        except Exception:
+            pass  # best-effort; proceed with what we have
+
+        # Scroll to review section and wait for lazy-loaded cards
+        review_count = await _scroll_for_reviews(page)
+        logger.info(
+            "Scrolled to reviews for %s — found %d review card(s)", url, review_count
+        )
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=4_000)
+        except Exception:
+            pass
+
+        # Brief random pause for any remaining rendering
+        await page.wait_for_timeout(random.randint(600, 1200))
 
         dom_value = await page.evaluate(DOM_SERIALIZER_SCRIPT)
         if not isinstance(dom_value, dict):

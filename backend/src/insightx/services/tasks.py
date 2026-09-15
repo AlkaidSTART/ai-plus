@@ -52,6 +52,7 @@ from insightx.schemas import (
     TaskStatus,
     TaskWindow,
 )
+from insightx.services.export import export_task_charter_zip
 
 _TERMINAL_TASK_STATUSES = {
     TaskStatus.COMPLETED,
@@ -352,9 +353,7 @@ def _build_snapshot(
             ),
             nodes=list(nodes_by_item[item.item_id].values()),
             error=(
-                TaskError.model_validate(item.error)
-                if item.error is not None
-                else None
+                TaskError.model_validate(item.error) if item.error is not None else None
             ),
             report_available=item.item_id in report_item_ids,
         )
@@ -556,13 +555,20 @@ def create_task(
                     request_hash=request_hash,
                 )
 
+            target_asins = list(request.asins)
+            if not target_asins and request.keyword:
+                from insightx.services.search import search_amazon_products_sync
+
+                products = search_amazon_products_sync(request.keyword, limit=10)
+                target_asins = [p["asin"] for p in products if p.get("asin")]
+
             task, _ = _persist_task(
                 session,
                 tenant_id=tenant_id,
                 platform=request.platform,
                 marketplace=request.marketplace,
                 window_preset=request.window.preset,
-                asins=request.asins,
+                asins=target_asins,
                 parent_task_id=None,
             )
             session.add(
@@ -601,9 +607,7 @@ def list_tasks(
 ) -> Page[TaskListItem]:
     """Return a stable, cursor-paginated task list for one tenant."""
 
-    statement: Select[tuple[Task]] = select(Task).where(
-        Task.tenant_id == tenant_id
-    )
+    statement: Select[tuple[Task]] = select(Task).where(Task.tenant_id == tenant_id)
     if status is not None:
         statement = statement.where(Task.status == status.value)
     if cursor is not None:
@@ -816,13 +820,9 @@ def get_report(
             for pain_point in report.pain_points
         ],
         proposals=[
-            ReportProposal.model_validate(proposal)
-            for proposal in report.proposals
+            ReportProposal.model_validate(proposal) for proposal in report.proposals
         ],
-        warnings=[
-            ReportWarning.model_validate(warning)
-            for warning in report.warnings
-        ],
+        warnings=[ReportWarning.model_validate(warning) for warning in report.warnings],
         model_metadata=report.model_metadata,
     )
 
@@ -1028,3 +1028,18 @@ def task_is_terminal(
         if task is None:
             return True
         return TaskStatus(task.status) in _TERMINAL_TASK_STATUSES
+
+
+def export_task_charter(
+    session: Session,
+    *,
+    tenant_id: str,
+    task_id: str,
+) -> tuple[bytes, str]:
+    """Export the task engineering charter as a zip archive."""
+
+    return export_task_charter_zip(
+        session,
+        tenant_id=tenant_id,
+        task_id=task_id,
+    )

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChart, RadarChart } from 'echarts/charts'
+import { BarChart, LineChart, RadarChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -7,7 +7,15 @@ import { BarChart3 } from '@lucide/vue'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
 
-echarts.use([BarChart, RadarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([
+  BarChart,
+  LineChart,
+  RadarChart,
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  CanvasRenderer,
+])
 
 /**
  * ECharts 薄封装：按需注册柱状/雷达；option 为 null 时渲染空态而非假数据。

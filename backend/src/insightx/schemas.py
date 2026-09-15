@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Any, Generic, Literal, TypeVar
+from typing import Annotated, Any, Literal, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    field_validator,
+    model_validator,
+)
 
 
 def serialize_utc_datetime(value: datetime) -> str:
@@ -83,21 +90,37 @@ class TaskWindow(StrictModel):
 class TaskCreateRequest(StrictModel):
     """Request body for creating a task batch."""
 
-    asins: list[str] = Field(min_length=1, max_length=10)
-    platform: Literal["amazon"]
-    marketplace: Literal["US"]
+    asins: list[str] = Field(default_factory=list, max_length=10)
+    keyword: str | None = Field(default=None, max_length=200)
+    platform: Literal["amazon"] = "amazon"
+    marketplace: Literal["US"] = "US"
     window: TaskWindow
 
     @field_validator("asins", mode="before")
     @classmethod
     def normalize_asins(cls, asins: Any) -> Any:
-        """Uppercase and deduplicate ASINs while preserving first-use order."""
+        """Extract, uppercase, and deduplicate ASINs while preserving first-use order."""
 
+        if asins is None:
+            return []
         if not isinstance(asins, list):
             return asins
         if not all(isinstance(asin, str) for asin in asins):
             return asins
-        normalized = list(dict.fromkeys(asin.upper() for asin in asins))
+
+        from insightx.services.asin import extract_asin
+
+        normalized: list[str] = []
+        for raw in asins:
+            asin = extract_asin(raw)
+            if asin:
+                if asin not in normalized:
+                    normalized.append(asin)
+            else:
+                raw_upper = raw.strip().upper()
+                if raw_upper not in normalized:
+                    normalized.append(raw_upper)
+
         invalid = [
             asin
             for asin in normalized
@@ -106,6 +129,48 @@ class TaskCreateRequest(StrictModel):
         if invalid:
             raise ValueError("ASIN must match ^[A-Z0-9]{10}$")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_inputs(self) -> Self:
+        if not self.asins and not (self.keyword and self.keyword.strip()):
+            raise ValueError("Either asins or keyword must be provided")
+        return self
+
+
+class ExtractAsinsRequest(StrictModel):
+    """Request body for extracting ASINs from text or URLs."""
+
+    text: str | None = None
+    urls: list[str] = Field(default_factory=list)
+
+
+class ExtractAsinsResponse(StrictModel):
+    """Response body containing extracted ASINs."""
+
+    asins: list[str]
+
+
+class ProductItem(StrictModel):
+    """Product summary item."""
+
+    asin: str
+    title: str
+    rating: float | None = None
+    url: str
+
+
+class SearchProductsRequest(StrictModel):
+    """Request body for searching products by keyword."""
+
+    keyword: str = Field(min_length=1, max_length=200)
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class SearchProductsResponse(StrictModel):
+    """Response body with search products results."""
+
+    keyword: str
+    products: list[ProductItem]
 
 
 class RetryTaskRequest(StrictModel):
@@ -243,9 +308,7 @@ class ReportProposal(StrictModel):
     """Evidence-backed recommendation in a generated report."""
 
     proposal_id: str
-    column: Literal[
-        "PRODUCT_OPTIMIZATION", "PACKAGING_FULFILLMENT_OPTIMIZATION"
-    ]
+    column: Literal["PRODUCT_OPTIMIZATION", "PACKAGING_FULFILLMENT_OPTIMIZATION"]
     title: str
     change_description: str
     pain_point_ids: list[str] = Field(min_length=1)
@@ -292,17 +355,187 @@ class EvidenceResponse(StrictModel):
     provenance: dict[str, Any]
 
 
+class FinancialEvaluateRequest(StrictModel):
+    """Input parameters for deterministic financial risk and veto evaluation."""
+
+    mold_cost: float | None = Field(default=None, ge=0)
+    sample_cost: float | None = Field(default=None, ge=0)
+    moq: int | None = Field(default=None, ge=1)
+    unit_product_cost: float | None = Field(default=None, ge=0)
+    expected_sales_price: float | None = Field(default=None, ge=0)
+    shipping_cost_per_unit: float | None = Field(default=None, ge=0)
+    monthly_estimated_sales: int | None = Field(default=None, ge=1)
+    target_payback_months: int = Field(default=6, ge=1, le=60)
+    category_half_life_months: int = Field(default=12, ge=1, le=60)
+    max_cash_budget: float | None = Field(default=None, ge=0)
+    currency: Literal["USD"] = "USD"
+    rule_version: str = "financial_rules_v1.0"
+    task_id: str | None = None
+    item_id: str | None = None
+
+
+class FinancialMetrics(StrictModel):
+    """Calculated deterministic financial metrics."""
+
+    fixed_costs: float
+    variable_cost_per_unit: float
+    unit_contribution_margin: float
+    gross_margin_rate: float
+    initial_batch_cash: float
+    amortized_mold_cost_per_unit: float
+    mold_cost_ratio: float
+    monthly_contribution: float
+    break_even_units: int | None
+    payback_months: float
+    estimated_12m_roi: float
+
+
+class BreakEvenPoint(StrictModel):
+    """Monthly cash flow and break-even projection point."""
+
+    month: int
+    cumulative_units: int
+    cumulative_revenue: float
+    cumulative_cost: float
+    net_cashflow: float
+    is_break_even: bool
+
+
+class SensitivityPoint(StrictModel):
+    """Sensitivity analysis point under sales/price variation."""
+
+    sales_change_percent: float
+    price_change_percent: float
+    payback_months: float
+    is_vetoed: bool
+
+
+class AlternativeSuggestion(StrictModel):
+    """Actionable alternative recommendation when vetoed."""
+
+    suggestion_id: str
+    title: str
+    description: str
+    estimated_impact: str
+    suggested_params: dict[str, Any]
+
+
+class FinancialEvaluateResponse(StrictModel):
+    """Deterministic financial evaluation result and circuit breaker state."""
+
+    financial_state: FinancialState
+    circuit_breaker_triggered: bool
+    rule_version: str
+    currency: str
+    evaluated_at: UtcDateTime
+    reasons: list[str]
+    triggered_rules: list[str]
+    metrics: FinancialMetrics | None
+    break_even_timeline: list[BreakEvenPoint]
+    sensitivity_matrix: list[SensitivityPoint]
+    alternative_suggestions: list[AlternativeSuggestion]
+    applied_assumptions: dict[str, Any]
+
+
+class FinancialRuleItem(StrictModel):
+    """Specification of one deterministic veto rule."""
+
+    code: str
+    name: str
+    description: str
+    threshold: str
+
+
+class FinancialRuleInfo(StrictModel):
+    """Metadata describing active financial veto rules."""
+
+    rule_version: str
+    rules: list[FinancialRuleItem]
+
+
+class BsrHistoryPoint(StrictModel):
+    """Historical point for BSR and price time series."""
+
+    timestamp: UtcDateTime
+    bsr: int
+    sub_bsr: int | None = None
+    price: float
+    buy_box: bool = True
+
+
+class CompetitorBsrItem(StrictModel):
+    """Monitored competitor BSR and pricing overview."""
+
+    asin: str
+    title: str
+    category: str
+    subcategory: str | None = None
+    current_bsr: int
+    current_sub_bsr: int | None = None
+    bsr_change_7d: int
+    current_price: float
+    currency: str = "USD"
+    buy_box_ratio: float = Field(ge=0.0, le=1.0)
+    buy_box_winner: str
+    rating: float = Field(ge=0.0, le=5.0)
+    review_count: int = Field(ge=0)
+    history: list[BsrHistoryPoint]
+
+
+class BsrTrendsResponse(StrictModel):
+    """Competitor BSR trends response."""
+
+    items: list[CompetitorBsrItem]
+    updated_at: UtcDateTime
+
+
+class CrossPlatformItem(StrictModel):
+    """Cross-platform mapped SKU comparison item."""
+
+    id: str
+    target_asin: str
+    target_title: str
+    target_price: float
+    platform: Literal["TIKTOK", "TEMU"]
+    platform_sku: str
+    platform_title: str
+    platform_url: str
+    platform_price: float
+    estimated_fees: float
+    estimated_spread: float
+    match_score: float = Field(ge=0.0, le=1.0)
+    match_status: Literal["MATCHED", "PENDING", "VARIANT"]
+    monthly_sales: int = Field(ge=0)
+    updated_at: UtcDateTime
+
+
+class CrossPlatformMetrics(StrictModel):
+    """Aggregated cross-platform arbitrage and match metrics."""
+
+    total_skus: int
+    avg_match_score: float
+    max_spread: float
+    arbitrage_opportunities: int
+
+
+class CrossPlatformResponse(StrictModel):
+    """Cross-platform mapping matrix response."""
+
+    metrics: CrossPlatformMetrics
+    items: list[CrossPlatformItem]
+
+
 T = TypeVar("T")
 
 
-class Page(StrictModel, Generic[T]):
+class Page[T](StrictModel):
     """Cursor-paginated result."""
 
     items: list[T]
     next_cursor: str | None
 
 
-class SuccessEnvelope(StrictModel, Generic[T]):
+class SuccessEnvelope[T](StrictModel):
     """Standard successful API envelope."""
 
     code: Literal[0] = 0
