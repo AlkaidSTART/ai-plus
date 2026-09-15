@@ -28,7 +28,7 @@ from insightx.models import (
     TaskItem,
     utc_now,
 )
-from insightx.schemas import (
+from insightx.services.export import export_task_charter_zip
     DataQuality,
     EvidenceResponse,
     EvidenceSourceType,
@@ -1028,3 +1028,19 @@ def task_is_terminal(
         if task is None:
             return True
         return TaskStatus(task.status) in _TERMINAL_TASK_STATUSES
+
+
+def export_task_charter(
+    session: Session,
+    *,
+    tenant_id: str,
+    task_id: str,
+) -> tuple[bytes, str]:
+    """Export the task engineering charter as a zip archive."""
+
+    return export_task_charter_zip(
+        session,
+        tenant_id=tenant_id,
+        task_id=task_id,
+    )
+

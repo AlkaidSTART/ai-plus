@@ -292,6 +292,105 @@ class EvidenceResponse(StrictModel):
     provenance: dict[str, Any]
 
 
+class FinancialEvaluateRequest(StrictModel):
+    """Input parameters for deterministic financial risk and veto evaluation."""
+
+    mold_cost: float | None = Field(default=None, ge=0)
+    sample_cost: float | None = Field(default=None, ge=0)
+    moq: int | None = Field(default=None, ge=1)
+    unit_product_cost: float | None = Field(default=None, ge=0)
+    expected_sales_price: float | None = Field(default=None, ge=0)
+    shipping_cost_per_unit: float | None = Field(default=None, ge=0)
+    monthly_estimated_sales: int | None = Field(default=None, ge=1)
+    target_payback_months: int = Field(default=6, ge=1, le=60)
+    category_half_life_months: int = Field(default=12, ge=1, le=60)
+    max_cash_budget: float | None = Field(default=None, ge=0)
+    currency: Literal["USD"] = "USD"
+    rule_version: str = "financial_rules_v1.0"
+    task_id: str | None = None
+    item_id: str | None = None
+
+
+class FinancialMetrics(StrictModel):
+    """Calculated deterministic financial metrics."""
+
+    fixed_costs: float
+    variable_cost_per_unit: float
+    unit_contribution_margin: float
+    gross_margin_rate: float
+    initial_batch_cash: float
+    amortized_mold_cost_per_unit: float
+    mold_cost_ratio: float
+    monthly_contribution: float
+    break_even_units: int | None
+    payback_months: float
+    estimated_12m_roi: float
+
+
+class BreakEvenPoint(StrictModel):
+    """Monthly cash flow and break-even projection point."""
+
+    month: int
+    cumulative_units: int
+    cumulative_revenue: float
+    cumulative_cost: float
+    net_cashflow: float
+    is_break_even: bool
+
+
+class SensitivityPoint(StrictModel):
+    """Sensitivity analysis point under sales/price variation."""
+
+    sales_change_percent: float
+    price_change_percent: float
+    payback_months: float
+    is_vetoed: bool
+
+
+class AlternativeSuggestion(StrictModel):
+    """Actionable alternative recommendation when vetoed."""
+
+    suggestion_id: str
+    title: str
+    description: str
+    estimated_impact: str
+    suggested_params: dict[str, Any]
+
+
+class FinancialEvaluateResponse(StrictModel):
+    """Deterministic financial evaluation result and circuit breaker state."""
+
+    financial_state: FinancialState
+    circuit_breaker_triggered: bool
+    rule_version: str
+    currency: str
+    evaluated_at: UtcDateTime
+    reasons: list[str]
+    triggered_rules: list[str]
+    metrics: FinancialMetrics | None
+    break_even_timeline: list[BreakEvenPoint]
+    sensitivity_matrix: list[SensitivityPoint]
+    alternative_suggestions: list[AlternativeSuggestion]
+    applied_assumptions: dict[str, Any]
+
+
+class FinancialRuleItem(StrictModel):
+    """Specification of one deterministic veto rule."""
+
+    code: str
+    name: str
+    description: str
+    threshold: str
+
+
+class FinancialRuleInfo(StrictModel):
+    """Metadata describing active financial veto rules."""
+
+    rule_version: str
+    rules: list[FinancialRuleItem]
+
+
+
 T = TypeVar("T")
 
 

@@ -361,8 +361,14 @@ async def _poll(
 ) -> bool:
     """Run one poll without invoking the sync worker CLI event loop wrapper."""
 
-    del _poll
-    raise AssertionError("unreachable")
+    import asyncio
+
+    return await asyncio.to_thread(
+        poll_and_execute_next,
+        session_factory,
+        fetcher=fetcher,
+        worker_id=worker_id,
+    )
 
 
 def _expected_request_host(url: str) -> str:
