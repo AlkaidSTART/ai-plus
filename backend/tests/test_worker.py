@@ -26,7 +26,7 @@ from insightx.models import (
     TaskItem,
 )
 from insightx.schemas import NodeStatus, TaskStatus
-from insightx.services.worker import poll_and_execute_next
+from insightx.services.worker import _extract_reviews, poll_and_execute_next
 
 
 @compiles(JSONB, "sqlite")
@@ -371,3 +371,45 @@ async def _poll(
 
 def _expected_request_host(url: str) -> str:
     return urlparse(url).hostname or ""
+
+
+def test_extract_reviews_supports_aspect_review_quotes() -> None:
+    dom: DomNode = {
+        "type": "element",
+        "tag": "html",
+        "attributes": {},
+        "children": [
+            {
+                "type": "element",
+                "tag": "div",
+                "attributes": {"id": "rh_controls_aspect_0"},
+                "children": [
+                    {
+                        "type": "element",
+                        "tag": "span",
+                        "attributes": {},
+                        "children": [
+                            {
+                                "type": "text",
+                                "text": "This wallet is such great quality and holds everything nicely.",
+                            },
+                            {
+                                "type": "element",
+                                "tag": "a",
+                                "attributes": {
+                                    "href": "/portal/customer-reviews/srp/-/R123QO0I6EKXYD",
+                                    "data-testid": "read-more",
+                                },
+                                "children": [{"type": "text", "text": "Read more"}],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    reviews, excluded = _extract_reviews(dom)
+    assert len(reviews) == 1
+    assert reviews[0]["source_ref"] == "R123QO0I6EKXYD"
+    assert "great quality" in reviews[0]["excerpt"]
+    assert excluded == 0

@@ -58,12 +58,21 @@ window.chrome = {runtime: {}};
 # (0 means none loaded even after scrolling).
 _SCROLL_TO_REVIEWS_SCRIPT = """
 async () => {
-    // Try to find the reviews widget and scroll to it
+    // Step-scroll down to trigger IntersectionObservers for lazy-loaded widgets
+    const totalHeight = document.body.scrollHeight;
+    const steps = [0.35, 0.65, 0.85];
+    for (const ratio of steps) {
+        window.scrollTo(0, totalHeight * ratio);
+        await new Promise(r => setTimeout(r, 350));
+    }
+
     const selectors = [
+        '#localTopReviewsList',
         '#cm-cr-dp-review-list',
         '[data-hook="reviews-medley-widget"]',
         '#reviewsMedley',
         '#customer-reviews-content',
+        '#customer-reviews_feature_div',
     ];
     let target = null;
     for (const sel of selectors) {
@@ -73,32 +82,33 @@ async () => {
     if (target) {
         target.scrollIntoView({behavior: 'instant', block: 'center'});
     } else {
-        // No review container found — scroll to bottom to trigger any
-        // lazy-load and then back up.
-        window.scrollTo(0, document.body.scrollHeight * 0.75);
+        window.scrollTo(0, totalHeight);
     }
 
-    // Wait up to 5s for at least one review card to appear
-    const deadline = Date.now() + 5000;
+    // Wait up to 6s for review cards or aspect quote links to appear
+    const deadline = Date.now() + 6000;
     while (Date.now() < deadline) {
-        const count = document.querySelectorAll('[data-hook="review"]').length;
+        const count = document.querySelectorAll(
+            '[data-hook="review"], #localTopReviewsList li, [data-testid="read-more"], a[href*="/customer-reviews/srp/"]'
+        ).length;
         if (count > 0) return count;
         await new Promise(r => setTimeout(r, 300));
     }
 
-    // Second attempt: click "See more reviews" link if present
+    // Second attempt: scroll See More / FocalReviews link if present
     const seeMore = document.querySelector(
         '[data-hook="see-all-reviews-link-foot"], '
       + 'a[href*="product-reviews"], '
       + '.cr-widget-FocalReviews a.a-link-emphasis'
     );
-    // Don't navigate — just trigger the lazy loader by scrolling again
     if (seeMore) {
         seeMore.scrollIntoView({behavior: 'instant', block: 'center'});
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1500));
     }
 
-    return document.querySelectorAll('[data-hook="review"]').length;
+    return document.querySelectorAll(
+        '[data-hook="review"], #localTopReviewsList li, [data-testid="read-more"], a[href*="/customer-reviews/srp/"]'
+    ).length;
 }
 """
 
@@ -124,7 +134,7 @@ async def fetch_dom(
 ) -> FetchedPage:
     """Open one URL with Chromium and capture its rendered DOM.
 
-    Retries transient failures (connection reset, timeout) with exponential
+    Retries transient failures (connection reset, timeout, bot check) with exponential
     backoff and jitter.  Each attempt uses a fresh browser instance with
     randomised fingerprint to reduce bot-detection risk.
     """
@@ -133,16 +143,36 @@ async def fetch_dom(
     for attempt in range(1, max_retries + 1):
         try:
             async with async_playwright() as playwright:
-                return await fetch_with_playwright(
+                page = await fetch_with_playwright(
                     playwright,
                     url,
                     timeout_ms=timeout_ms,
                     headless=headless,
                 )
+                if page.http_status != 200:
+                    raise RuntimeError(f"HTTP {page.http_status} fetching {url}")
+
+                # Detect Amazon robot check / CAPTCHA page served with HTTP 200
+                is_amazon = "amazon." in page.final_url.lower() or "amazon." in url.lower()
+                if is_amazon:
+                    title_clean = page.title.strip().lower()
+                    if title_clean in {"amazon.com", "sorry! something went wrong!", ""}:
+                        raise RuntimeError(
+                            f"Amazon bot check / block page detected: title={page.title!r}"
+                        )
+                    if any(
+                        marker in title_clean
+                        for marker in ("captcha", "robot check", "automated access")
+                    ):
+                        raise RuntimeError(
+                            f"Amazon bot check / CAPTCHA detected: title={page.title!r}"
+                        )
+
+                return page
         except Exception as exc:
             last_error = exc
             if attempt < max_retries:
-                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1)) + random.uniform(0, 1)
+                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0)
                 logger.warning(
                     "Fetch attempt %d/%d failed for %s: %s — retrying in %.1fs",
                     attempt,
@@ -233,7 +263,7 @@ async def fetch_with_playwright(
 
         # Wait for full network idle — catches XHR-loaded review widgets
         try:
-            await page.wait_for_load_state("networkidle", timeout=10_000)
+            await page.wait_for_load_state("networkidle", timeout=8_000)
         except Exception:
             pass  # best-effort; proceed with what we have
 
@@ -243,8 +273,13 @@ async def fetch_with_playwright(
             "Scrolled to reviews for %s — found %d review card(s)", url, review_count
         )
 
+        try:
+            await page.wait_for_load_state("networkidle", timeout=4_000)
+        except Exception:
+            pass
+
         # Brief random pause for any remaining rendering
-        await page.wait_for_timeout(random.randint(800, 1500))
+        await page.wait_for_timeout(random.randint(600, 1200))
 
         dom_value = await page.evaluate(DOM_SERIALIZER_SCRIPT)
         if not isinstance(dom_value, dict):

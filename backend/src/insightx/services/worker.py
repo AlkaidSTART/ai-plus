@@ -588,6 +588,75 @@ def _parse_review_node(
     }
 
 
+def _extract_aspect_reviews(
+    dom: DomNode,
+    *,
+    seen_refs: set[str],
+    seen_hashes: set[str],
+    limit: int,
+    current_count: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Fallback extractor for Amazon modern aspect-based customer review quotes."""
+    elements: list[tuple[DomNode, tuple[DomNode, ...]]] = []
+
+    def collect(node: DomNode, path: tuple[DomNode, ...] = ()) -> None:
+        if node.get("type") == "element":
+            current_path = path + (node,)
+            elements.append((node, current_path))
+            children = node.get("children")
+            if isinstance(children, list):
+                for c in children:
+                    if isinstance(c, dict):
+                        collect(c, current_path)
+
+    collect(dom)
+
+    aspect_reviews: list[dict[str, Any]] = []
+    excluded_count = 0
+
+    for node, path in elements:
+        if node.get("tag") == "a":
+            href = _attributes(node).get("href", "")
+            match = re.search(r"/(R[A-Z0-9]{8,})", href)
+            if match:
+                ref = match.group(1)
+                if ref in seen_refs:
+                    excluded_count += 1
+                    continue
+                excerpt = ""
+                for ancestor in reversed(path[:-1]):
+                    text = _node_text(ancestor)
+                    cleaned = re.sub(r"\bRead more\b", "", text).strip(' "\'“”….\t\n')
+                    if 15 <= len(cleaned) <= 1000:
+                        excerpt = cleaned
+                        break
+                if not excerpt:
+                    excluded_count += 1
+                    continue
+                body_hash = hashlib.sha256(excerpt.encode("utf-8")).hexdigest()
+                if body_hash in seen_hashes:
+                    excluded_count += 1
+                    continue
+                if current_count + len(aspect_reviews) >= limit:
+                    excluded_count += 1
+                    continue
+
+                seen_refs.add(ref)
+                seen_hashes.add(body_hash)
+                aspect_reviews.append(
+                    {
+                        "source_ref": ref,
+                        "excerpt": excerpt,
+                        "title": None,
+                        "rating": None,
+                        "review_date": None,
+                        "raw_index": current_count + len(aspect_reviews) + 1,
+                    }
+                )
+
+    return aspect_reviews, excluded_count
+
+
 def _extract_reviews(
     dom: DomNode, *, limit: int = 10
 ) -> tuple[list[dict[str, Any]], int]:
@@ -618,6 +687,18 @@ def _extract_reviews(
         seen_hashes.add(body_hash)
         parsed["raw_index"] = index
         reviews.append(parsed)
+
+    if len(reviews) < limit:
+        aspect_revs, aspect_excluded = _extract_aspect_reviews(
+            dom,
+            seen_refs=seen_refs,
+            seen_hashes=seen_hashes,
+            limit=limit,
+            current_count=len(reviews),
+        )
+        reviews.extend(aspect_revs)
+        excluded_count += aspect_excluded
+
     return reviews, excluded_count
 
 
