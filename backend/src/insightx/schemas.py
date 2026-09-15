@@ -388,6 +388,78 @@ class FinancialRuleInfo(StrictModel):
     rules: list[FinancialRuleItem]
 
 
+class BsrHistoryPoint(StrictModel):
+    """Historical point for BSR and price time series."""
+
+    timestamp: UtcDateTime
+    bsr: int
+    sub_bsr: int | None = None
+    price: float
+    buy_box: bool = True
+
+
+class CompetitorBsrItem(StrictModel):
+    """Monitored competitor BSR and pricing overview."""
+
+    asin: str
+    title: str
+    category: str
+    subcategory: str | None = None
+    current_bsr: int
+    current_sub_bsr: int | None = None
+    bsr_change_7d: int
+    current_price: float
+    currency: str = "USD"
+    buy_box_ratio: float = Field(ge=0.0, le=1.0)
+    buy_box_winner: str
+    rating: float = Field(ge=0.0, le=5.0)
+    review_count: int = Field(ge=0)
+    history: list[BsrHistoryPoint]
+
+
+class BsrTrendsResponse(StrictModel):
+    """Competitor BSR trends response."""
+
+    items: list[CompetitorBsrItem]
+    updated_at: UtcDateTime
+
+
+class CrossPlatformItem(StrictModel):
+    """Cross-platform mapped SKU comparison item."""
+
+    id: str
+    target_asin: str
+    target_title: str
+    target_price: float
+    platform: Literal["TIKTOK", "TEMU"]
+    platform_sku: str
+    platform_title: str
+    platform_url: str
+    platform_price: float
+    estimated_fees: float
+    estimated_spread: float
+    match_score: float = Field(ge=0.0, le=1.0)
+    match_status: Literal["MATCHED", "PENDING", "VARIANT"]
+    monthly_sales: int = Field(ge=0)
+    updated_at: UtcDateTime
+
+
+class CrossPlatformMetrics(StrictModel):
+    """Aggregated cross-platform arbitrage and match metrics."""
+
+    total_skus: int
+    avg_match_score: float
+    max_spread: float
+    arbitrage_opportunities: int
+
+
+class CrossPlatformResponse(StrictModel):
+    """Cross-platform mapping matrix response."""
+
+    metrics: CrossPlatformMetrics
+    items: list[CrossPlatformItem]
+
+
 T = TypeVar("T")
 
 
