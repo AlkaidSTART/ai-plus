@@ -8,27 +8,12 @@ import pytest
 from sqlalchemy import BigInteger
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
+
 from insightx.schemas import (
     DataQuality,
-    NodeStatus,
-    ReportPainPoint,
-    ReportProposal,
     TaskCreateRequest,
     TaskWindow,
 )
-
-
-@compiles(JSONB, "sqlite")
-def compile_jsonb_sqlite(type_: Any, compiler: Any, **kw: Any) -> str:
-    del type_, compiler, kw
-    return "JSON"
-
-
-@compiles(BigInteger, "sqlite")
-def compile_bigint_sqlite(type_: Any, compiler: Any, **kw: Any) -> str:
-    del type_, compiler, kw
-    return "INTEGER"
-
 from insightx.services.analysis import (
     analyze_reviews,
     deduplicate_reviews,
@@ -43,6 +28,19 @@ from insightx.services.search import (
     normalize_search_keyword,
     search_amazon_products_sync,
 )
+
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(type_: Any, compiler: Any, **kw: Any) -> str:
+    del type_, compiler, kw
+    return "JSON"
+
+
+@compiles(BigInteger, "sqlite")
+def compile_bigint_sqlite(type_: Any, compiler: Any, **kw: Any) -> str:
+    del type_, compiler, kw
+    return "INTEGER"
+
 
 USER_EXAMPLE_URL = (
     "https://www.amazon.com/Project-Cloud-Mens-Shoes-Lightweight/dp/B0FFW9LG7S/"
@@ -59,21 +57,18 @@ class TestAsinExtraction:
     def test_extract_various_url_formats(self) -> None:
         assert extract_asin("https://www.amazon.com/dp/B0D5N57SHS") == "B0D5N57SHS"
         assert (
-            extract_asin("https://www.amazon.com/gp/product/B0052TBWM4")
-            == "B0052TBWM4"
+            extract_asin("https://www.amazon.com/gp/product/B0052TBWM4") == "B0052TBWM4"
         )
         assert (
             extract_asin("https://www.amazon.com/product/B09YBLCL41?th=1")
             == "B09YBLCL41"
         )
         assert (
-            extract_asin("https://www.amazon.com/gp/aw/d/B0BS6G9WG6/")
-            == "B0BS6G9WG6"
+            extract_asin("https://www.amazon.com/gp/aw/d/B0BS6G9WG6/") == "B0BS6G9WG6"
         )
         assert extract_asin("https://a.co/d/B0D22VJ984") == "B0D22VJ984"
         assert (
-            extract_asin("https://www.amazon.com/item?asin=B0CL4XJCJW")
-            == "B0CL4XJCJW"
+            extract_asin("https://www.amazon.com/item?asin=B0CL4XJCJW") == "B0CL4XJCJW"
         )
         assert extract_asin("B0FFW9LG7S") == "B0FFW9LG7S"
         assert extract_asin("b0ffw9lg7s") == "B0FFW9LG7S"
@@ -155,10 +150,26 @@ class TestSearchAndMatching:
 class TestReviewDeduplicationAndAnalysis:
     def test_deduplicate_reviews(self) -> None:
         reviews = [
-            {"source_ref": "rev_1", "excerpt": "Good shoe but too narrow at the toes.", "rating": 3},
-            {"source_ref": "rev_1", "excerpt": "Good shoe but too narrow at the toes.", "rating": 3},  # duplicate source_ref
-            {"source_ref": "rev_2", "excerpt": "Good shoe but too narrow at the toes.", "rating": 3},  # duplicate content hash
-            {"source_ref": "rev_3", "excerpt": "Sole came off after one week. Terrible glue.", "rating": 1},
+            {
+                "source_ref": "rev_1",
+                "excerpt": "Good shoe but too narrow at the toes.",
+                "rating": 3,
+            },
+            {
+                "source_ref": "rev_1",
+                "excerpt": "Good shoe but too narrow at the toes.",
+                "rating": 3,
+            },  # duplicate source_ref
+            {
+                "source_ref": "rev_2",
+                "excerpt": "Good shoe but too narrow at the toes.",
+                "rating": 3,
+            },  # duplicate content hash
+            {
+                "source_ref": "rev_3",
+                "excerpt": "Sole came off after one week. Terrible glue.",
+                "rating": 1,
+            },
         ]
         unique, excluded = deduplicate_reviews(reviews, limit=10)
         assert len(unique) == 2
@@ -168,7 +179,11 @@ class TestReviewDeduplicationAndAnalysis:
 
     def test_review_upper_limit(self) -> None:
         reviews = [
-            {"source_ref": f"rev_{i}", "excerpt": f"Review number {i} with distinct content.", "rating": 4}
+            {
+                "source_ref": f"rev_{i}",
+                "excerpt": f"Review number {i} with distinct content.",
+                "rating": 4,
+            }
             for i in range(25)
         ]
         unique, excluded = deduplicate_reviews(reviews, limit=10)
@@ -224,7 +239,9 @@ class TestReviewDeduplicationAndAnalysis:
 
         # Check dual-column proposals
         prod_props = [p for p in proposals if p.column == "PRODUCT_OPTIMIZATION"]
-        pack_props = [p for p in proposals if p.column == "PACKAGING_FULFILLMENT_OPTIMIZATION"]
+        pack_props = [
+            p for p in proposals if p.column == "PACKAGING_FULFILLMENT_OPTIMIZATION"
+        ]
         assert len(prod_props) > 0
         assert len(pack_props) > 0
 
@@ -242,6 +259,7 @@ class TestReviewDeduplicationAndAnalysis:
 class TestEndpointsAndPipeline:
     def test_extract_asins_endpoint(self) -> None:
         from fastapi.testclient import TestClient
+
         from insightx.main import app
 
         client = TestClient(app)
@@ -255,6 +273,7 @@ class TestEndpointsAndPipeline:
 
     def test_search_products_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from fastapi.testclient import TestClient
+
         from insightx.main import app
 
         async def mock_fail(*args: object, **kwargs: object) -> object:
@@ -292,8 +311,14 @@ class TestEndpointsAndPipeline:
             return "INTEGER"
 
         from insightx.crawler.fetch import FetchedPage
-        from insightx.models import Base, Evidence, EvidenceClaimRef, Report, Task, TaskItem
-        from insightx.schemas import NodeStatus
+        from insightx.models import (
+            Base,
+            Evidence,
+            EvidenceClaimRef,
+            Report,
+            Task,
+            TaskItem,
+        )
         from insightx.services.tasks import create_task
         from insightx.services.worker import execute_task_pipeline
 
@@ -306,56 +331,89 @@ class TestEndpointsAndPipeline:
         session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
         sample_dom = {
-            "node_id": 1,
+            "type": "element",
             "tag": "html",
+            "attributes": {},
             "children": [
                 {
-                    "node_id": 2,
+                    "type": "element",
                     "tag": "div",
                     "attributes": {"data-hook": "review", "id": "customer_review-1"},
                     "children": [
                         {
-                            "node_id": 3,
+                            "type": "element",
                             "tag": "span",
                             "attributes": {"data-hook": "review-title"},
-                            "text": "Too small and narrow",
+                            "children": [
+                                {"type": "text", "text": "Too small and narrow"}
+                            ],
                         },
                         {
-                            "node_id": 4,
+                            "type": "element",
                             "tag": "span",
                             "attributes": {"data-hook": "review-body"},
-                            "text": "These shoes are way too small and tight for my feet. Toe box is pinched.",
+                            "children": [
+                                {
+                                    "type": "text",
+                                    "text": "These shoes are way too small and tight for my feet. Toe box is pinched.",
+                                }
+                            ],
                         },
                         {
-                            "node_id": 5,
+                            "type": "element",
                             "tag": "i",
                             "attributes": {"data-hook": "review-star-rating"},
-                            "children": [{"node_id": 6, "tag": "span", "text": "2.0 out of 5 stars"}],
+                            "children": [
+                                {
+                                    "type": "element",
+                                    "tag": "span",
+                                    "attributes": {},
+                                    "children": [
+                                        {"type": "text", "text": "2.0 out of 5 stars"}
+                                    ],
+                                }
+                            ],
                         },
                     ],
                 },
                 {
-                    "node_id": 7,
+                    "type": "element",
                     "tag": "div",
                     "attributes": {"data-hook": "review", "id": "customer_review-2"},
                     "children": [
                         {
-                            "node_id": 8,
+                            "type": "element",
                             "tag": "span",
                             "attributes": {"data-hook": "review-title"},
-                            "text": "Sole broke and peeled off",
+                            "children": [
+                                {"type": "text", "text": "Sole broke and peeled off"}
+                            ],
                         },
                         {
-                            "node_id": 9,
+                            "type": "element",
                             "tag": "span",
                             "attributes": {"data-hook": "review-body"},
-                            "text": "The glue fell apart and the sole detached after one week of wear.",
+                            "children": [
+                                {
+                                    "type": "text",
+                                    "text": "The glue fell apart and the sole detached after one week of wear.",
+                                }
+                            ],
                         },
                         {
-                            "node_id": 10,
+                            "type": "element",
                             "tag": "i",
                             "attributes": {"data-hook": "review-star-rating"},
-                            "children": [{"node_id": 11, "tag": "span", "text": "1.0 out of 5 stars"}],
+                            "children": [
+                                {
+                                    "type": "element",
+                                    "tag": "span",
+                                    "attributes": {},
+                                    "children": [
+                                        {"type": "text", "text": "1.0 out of 5 stars"}
+                                    ],
+                                }
+                            ],
                         },
                     ],
                 },
@@ -412,4 +470,3 @@ class TestEndpointsAndPipeline:
 
             claim_refs = session.query(EvidenceClaimRef).all()
             assert len(claim_refs) > 0
-

@@ -39,8 +39,12 @@ def get_bsr_trends(
 @router.get("/cross-platform")
 def get_cross_platform(
     asin: str | None = Query(None, description="Filter by target Amazon ASIN"),
-    platform: str | None = Query(None, description="Filter by platform (TIKTOK, TEMU, ALL)"),
-    status: str | None = Query(None, description="Filter by status (MATCHED, PENDING, VARIANT, ALL)"),
+    platform: str | None = Query(
+        None, description="Filter by platform (TIKTOK, TEMU, ALL)"
+    ),
+    status: str | None = Query(
+        None, description="Filter by status (MATCHED, PENDING, VARIANT, ALL)"
+    ),
     tenant_id: str = Depends(get_tenant_id),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> SuccessEnvelope[CrossPlatformResponse]:

@@ -6,6 +6,7 @@ import type {
   BsrTrendsResponse,
   CrossPlatformResponse,
   EvidenceResponse,
+  ExtractAsinsResponse,
   FinancialEvaluateRequest,
   FinancialEvaluateResponse,
   FinancialRuleInfo,
@@ -16,6 +17,7 @@ import type {
   ListTasksParams,
   Page,
   ReportResponse,
+  SearchProductsResponse,
   TaskCreatedResponse,
   TaskCreateRequest,
   TaskListItem,
@@ -109,6 +111,22 @@ function jsonRequest(body: unknown): Pick<RequestInit, 'headers' | 'body'> {
 
 export function getHealth(signal?: AbortSignal) {
   return request<HealthResponse>('/api/v1/health', { signal })
+}
+
+export function extractAsins(text: string, signal?: AbortSignal) {
+  return request<ExtractAsinsResponse>('/api/v1/tasks/extract-asins', {
+    method: 'POST',
+    signal,
+    ...jsonRequest({ text }),
+  })
+}
+
+export function searchProducts(keyword: string, limit = 10, signal?: AbortSignal) {
+  return request<SearchProductsResponse>('/api/v1/tasks/search-products', {
+    method: 'POST',
+    signal,
+    ...jsonRequest({ keyword, limit }),
+  })
 }
 
 export function createTask(

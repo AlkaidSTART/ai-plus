@@ -6,7 +6,14 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    field_validator,
+    model_validator,
+)
 
 
 def serialize_utc_datetime(value: datetime) -> str:

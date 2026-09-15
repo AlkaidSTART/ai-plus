@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from insightx.crawler.dom import DOM_SERIALIZER_SCRIPT, DomNode
+from insightx.crawler.dom import DomNode
 from insightx.crawler.fetch import fetch_with_playwright
 
 

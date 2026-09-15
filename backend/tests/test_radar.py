@@ -94,7 +94,9 @@ async def test_bsr_trends_default(client: AsyncClient):
 
 
 async def test_bsr_trends_with_filters(client: AsyncClient):
-    res = await client.get("/api/v1/radar/bsr-trends", params={"asin": "B08N5WRWNW", "days": 7})
+    res = await client.get(
+        "/api/v1/radar/bsr-trends", params={"asin": "B08N5WRWNW", "days": 7}
+    )
     assert res.status_code == 200
     body = res.json()
     data = body["data"]
@@ -122,7 +124,10 @@ async def test_cross_platform_default(client: AsyncClient):
 
 
 async def test_cross_platform_filters(client: AsyncClient):
-    res = await client.get("/api/v1/radar/cross-platform", params={"platform": "TIKTOK", "status": "MATCHED"})
+    res = await client.get(
+        "/api/v1/radar/cross-platform",
+        params={"platform": "TIKTOK", "status": "MATCHED"},
+    )
     assert res.status_code == 200
     body = res.json()
     data = body["data"]

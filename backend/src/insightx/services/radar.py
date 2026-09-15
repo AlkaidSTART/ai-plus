@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from statistics import fmean
-from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -85,8 +84,10 @@ def _generate_history(
     for i in range(days, -1, -step):
         point_time = now - timedelta(days=i)
         seed = f"{asin}:{point_time.strftime('%Y-%m-%d')}"
-        bsr_noise = (_hash_int(f"{seed}:bsr", 21) - 10)  # -10 to +10
-        price_noise = round((_hash_int(f"{seed}:price", 9) - 4) * 0.5, 2)  # -2.0 to +2.0
+        bsr_noise = _hash_int(f"{seed}:bsr", 21) - 10  # -10 to +10
+        price_noise = round(
+            (_hash_int(f"{seed}:price", 9) - 4) * 0.5, 2
+        )  # -2.0 to +2.0
 
         bsr_val = max(1, base_bsr + bsr_noise)
         sub_bsr_val = max(1, base_sub_bsr + int(bsr_noise / 3))
@@ -171,7 +172,9 @@ def get_bsr_trends(
             now,
         )
         current_point = history[-1] if history else None
-        point_7d_ago = history[-8] if len(history) >= 8 else (history[0] if history else None)
+        point_7d_ago = (
+            history[-8] if len(history) >= 8 else (history[0] if history else None)
+        )
 
         current_bsr = current_point.bsr if current_point else comp["base_bsr"]
         old_bsr = point_7d_ago.bsr if point_7d_ago else current_bsr
@@ -185,9 +188,13 @@ def get_bsr_trends(
                 category=comp["category"],
                 subcategory=comp["subcategory"],
                 current_bsr=current_bsr,
-                current_sub_bsr=current_point.sub_bsr if current_point else comp["base_sub_bsr"],
+                current_sub_bsr=current_point.sub_bsr
+                if current_point
+                else comp["base_sub_bsr"],
                 bsr_change_7d=bsr_change_7d,
-                current_price=current_point.price if current_point else comp["base_price"],
+                current_price=current_point.price
+                if current_point
+                else comp["base_price"],
                 currency="USD",
                 buy_box_ratio=comp["buy_box_ratio"],
                 buy_box_winner=comp["buy_box_winner"],
@@ -222,7 +229,9 @@ def get_cross_platform(
 
         # Counterpart 1: TikTok Shop
         tiktok_price = round(t_price * 0.68, 2)
-        tiktok_fees = round(tiktok_price * 0.08 + 4.20, 2)  # 8% commission + $4.20 fulfillment
+        tiktok_fees = round(
+            tiktok_price * 0.08 + 4.20, 2
+        )  # 8% commission + $4.20 fulfillment
         tiktok_spread = round(t_price - tiktok_price - tiktok_fees, 2)
         match_score_tt = round(0.88 + (_hash_int(f"{t_asin}:tt", 11) * 0.01), 2)
         tt_status = "MATCHED" if match_score_tt >= 0.90 else "PENDING"
@@ -235,7 +244,7 @@ def get_cross_platform(
                 target_price=t_price,
                 platform="TIKTOK",
                 platform_sku=f"TTS-{t_asin[:6]}-BLK",
-                platform_title=f"Viral Stainless Tumbler Mug Leakproof 40oz (TikTok Trending)",
+                platform_title="Viral Stainless Tumbler Mug Leakproof 40oz (TikTok Trending)",
                 platform_url=f"https://shop.tiktok.com/view/product/{t_asin}",
                 platform_price=tiktok_price,
                 estimated_fees=tiktok_fees,
@@ -252,7 +261,11 @@ def get_cross_platform(
         temu_fees = round(temu_price * 0.05 + 3.10, 2)
         temu_spread = round(t_price - temu_price - temu_fees, 2)
         match_score_temu = round(0.82 + (_hash_int(f"{t_asin}:temu", 14) * 0.01), 2)
-        temu_status = "MATCHED" if match_score_temu >= 0.90 else ("VARIANT" if match_score_temu < 0.85 else "PENDING")
+        temu_status = (
+            "MATCHED"
+            if match_score_temu >= 0.90
+            else ("VARIANT" if match_score_temu < 0.85 else "PENDING")
+        )
 
         raw_items.append(
             CrossPlatformItem(
@@ -262,7 +275,7 @@ def get_cross_platform(
                 target_price=t_price,
                 platform="TEMU",
                 platform_sku=f"TEMU-{t_asin[:6]}-M40",
-                platform_title=f"Factory Direct Insulated Double Wall Coffee Cup Outdoor Travel",
+                platform_title="Factory Direct Insulated Double Wall Coffee Cup Outdoor Travel",
                 platform_url=f"https://www.temu.com/goods.html?goods_id={t_asin}",
                 platform_price=temu_price,
                 estimated_fees=temu_fees,
@@ -285,7 +298,9 @@ def get_cross_platform(
 
     avg_score = round(fmean([x.match_score for x in filtered]), 3) if filtered else 0.0
     max_spread = max([x.estimated_spread for x in filtered], default=0.0)
-    arbitrage_count = sum(1 for x in filtered if x.estimated_spread > 0 and x.match_score >= 0.85)
+    arbitrage_count = sum(
+        1 for x in filtered if x.estimated_spread > 0 and x.match_score >= 0.85
+    )
 
     metrics = CrossPlatformMetrics(
         total_skus=len(filtered),

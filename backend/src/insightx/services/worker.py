@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -502,7 +503,8 @@ def _node_text(node: DomNode) -> str:
 
 
 def _iter_elements(node: DomNode) -> Iterator[DomNode]:
-    if node.get("type") != "element":
+    node_type = node.get("type")
+    if node_type is not None and node_type != "element":
         return
     yield node
     children = node.get("children")
@@ -1058,7 +1060,9 @@ def execute_task_pipeline(
                     if raw_review_count == 0
                     else ["semantic_clustering", "dual_column_proposal_mapper"]
                 ),
-                "model_skip_reason": "NO_RAW_REVIEWS" if raw_review_count == 0 else None,
+                "model_skip_reason": "NO_RAW_REVIEWS"
+                if raw_review_count == 0
+                else None,
                 "capture": {
                     "request_url": request_url,
                     "final_url": page.final_url,

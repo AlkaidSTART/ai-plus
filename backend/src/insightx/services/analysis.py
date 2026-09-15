@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from statistics import fmean
 from typing import Any
 from uuid import uuid4
 
 from insightx.schemas import (
     DataQuality,
-    FinancialState,
     ReportPainPoint,
     ReportProposal,
 )
@@ -21,8 +19,22 @@ _DIMENSION_PATTERNS: list[dict[str, Any]] = [
         "dimension": "SIZING_AND_FIT",
         "label": "鞋楦偏窄与前掌挤脚",
         "keywords": [
-            "small", "tight", "narrow", "squeeze", "toe", "pinch", "size up",
-            "half size", "wide", "short", "偏小", "挤脚", "偏窄", "压脚背", "磨脚趾", "尺寸不准",
+            "small",
+            "tight",
+            "narrow",
+            "squeeze",
+            "toe",
+            "pinch",
+            "size up",
+            "half size",
+            "wide",
+            "short",
+            "偏小",
+            "挤脚",
+            "偏窄",
+            "压脚背",
+            "磨脚趾",
+            "尺寸不准",
         ],
         "default_severity": 4,
         "product_proposal": {
@@ -44,8 +56,23 @@ _DIMENSION_PATTERNS: list[dict[str, Any]] = [
         "dimension": "CUSHIONING_AND_ARCH",
         "label": "鞋底硬度偏高与足弓支撑不足",
         "keywords": [
-            "hard", "stiff", "arch", "pain", "hurt", "tired", "flat", "thin",
-            "support", "insole", "comfort", "硬", "硌脚", "支撑不足", "底薄", "脚酸", "脚痛",
+            "hard",
+            "stiff",
+            "arch",
+            "pain",
+            "hurt",
+            "tired",
+            "flat",
+            "thin",
+            "support",
+            "insole",
+            "comfort",
+            "硬",
+            "硌脚",
+            "支撑不足",
+            "底薄",
+            "脚酸",
+            "脚痛",
         ],
         "default_severity": 4,
         "product_proposal": {
@@ -67,8 +94,21 @@ _DIMENSION_PATTERNS: list[dict[str, Any]] = [
         "dimension": "HEEL_FRICTION",
         "label": "后跟杯口偏硬与摩擦起泡",
         "keywords": [
-            "blister", "rub", "heel", "ankle", "back", "scratch", "collar",
-            "blood", "band-aid", "磨脚", "起泡", "磨后跟", "刮脚", "磨破", "夹脚",
+            "blister",
+            "rub",
+            "heel",
+            "ankle",
+            "back",
+            "scratch",
+            "collar",
+            "blood",
+            "band-aid",
+            "磨脚",
+            "起泡",
+            "磨后跟",
+            "刮脚",
+            "磨破",
+            "夹脚",
         ],
         "default_severity": 3,
         "product_proposal": {
@@ -90,8 +130,23 @@ _DIMENSION_PATTERNS: list[dict[str, Any]] = [
         "dimension": "DURABILITY_AND_GLUE",
         "label": "边缘开胶与鞋面走线脱落",
         "keywords": [
-            "break", "broke", "glue", "fell apart", "rip", "tear", "stitch",
-            "quality", "cheap", "hole", "sole came off", "开胶", "脱胶", "断裂", "做工粗糙", "掉底", "开线",
+            "break",
+            "broke",
+            "glue",
+            "fell apart",
+            "rip",
+            "tear",
+            "stitch",
+            "quality",
+            "cheap",
+            "hole",
+            "sole came off",
+            "开胶",
+            "脱胶",
+            "断裂",
+            "做工粗糙",
+            "掉底",
+            "开线",
         ],
         "default_severity": 5,
         "product_proposal": {
@@ -113,8 +168,21 @@ _DIMENSION_PATTERNS: list[dict[str, Any]] = [
         "dimension": "PACKAGING_AND_ODOR",
         "label": "外箱挤压变形与开箱异味",
         "keywords": [
-            "box", "crushed", "smell", "odor", "packaging", "chemical", "fumes",
-            "damaged box", "stink", "压烂", "包装破损", "异味", "刺鼻", "胶水味", "包装简陋",
+            "box",
+            "crushed",
+            "smell",
+            "odor",
+            "packaging",
+            "chemical",
+            "fumes",
+            "damaged box",
+            "stink",
+            "压烂",
+            "包装破损",
+            "异味",
+            "刺鼻",
+            "胶水味",
+            "包装简陋",
         ],
         "default_severity": 3,
         "product_proposal": {
@@ -197,9 +265,7 @@ def analyze_reviews(
         return [], [], DataQuality.NO_DATA, sample_metrics
 
     ratings = [
-        float(r["rating"])
-        for r in reviews
-        if isinstance(r.get("rating"), (int, float))
+        float(r["rating"]) for r in reviews if isinstance(r.get("rating"), (int, float))
     ]
     avg_rating = round(fmean(ratings), 2) if ratings else 4.0
     neg_ratio = (
@@ -213,7 +279,9 @@ def analyze_reviews(
 
     for rev_idx, review in enumerate(reviews):
         text = f"{review.get('title', '')} {review.get('excerpt', '')}".lower()
-        ev_id = evidence_ids[rev_idx] if rev_idx < len(evidence_ids) else f"evd_{rev_idx}"
+        ev_id = (
+            evidence_ids[rev_idx] if rev_idx < len(evidence_ids) else f"evd_{rev_idx}"
+        )
 
         for dim_idx, dim_cfg in enumerate(_DIMENSION_PATTERNS):
             for kw in dim_cfg["keywords"]:
@@ -257,7 +325,11 @@ def analyze_reviews(
             severity_score = max(1, severity_score - 1)
 
         severity_level = (
-            "CRITICAL" if severity_score >= 4 else "MODERATE" if severity_score >= 2 else "MINOR"
+            "CRITICAL"
+            if severity_score >= 4
+            else "MODERATE"
+            if severity_score >= 2
+            else "MINOR"
         )
         first_excerpt = matches[0][1].get("excerpt", "")
         summary_text = (
@@ -332,7 +404,5 @@ def analyze_reviews(
         "missing_reasons": [],
     }
 
-    data_quality = (
-        DataQuality.SUFFICIENT if len(reviews) >= 3 else DataQuality.PARTIAL
-    )
+    data_quality = DataQuality.SUFFICIENT if len(reviews) >= 3 else DataQuality.PARTIAL
     return pain_points, proposals, data_quality, sample_metrics

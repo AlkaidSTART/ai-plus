@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 from typing import Any
 from urllib.parse import quote_plus
 
 from insightx.crawler.fetch import fetch_dom
-from insightx.services.asin import extract_asins
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +139,7 @@ def extract_products_from_html(html: str, limit: int = 10) -> list[dict[str, Any
                 if alt_m:
                     title = alt_m.group(1).strip()
 
-            rating_m = re.search(r'([0-5](?:\.\d+)?)\s+out\s+of\s+5\s+stars?', block)
+            rating_m = re.search(r"([0-5](?:\.\d+)?)\s+out\s+of\s+5\s+stars?", block)
             if rating_m:
                 try:
                     rating = float(rating_m.group(1))
@@ -184,12 +182,7 @@ async def search_amazon_products(
         for node in _iter_elements(page.dom):
             attrs = _attributes(node)
             asin = attrs.get("data-asin")
-            if (
-                asin
-                and len(asin) == 10
-                and asin.isalnum()
-                and asin.upper() not in seen
-            ):
+            if asin and len(asin) == 10 and asin.isalnum() and asin.upper() not in seen:
                 asin_upper = asin.upper()
                 seen.add(asin_upper)
                 title = _node_text(node)
@@ -259,4 +252,3 @@ def search_amazon_products_sync(
     except Exception as exc:
         logger.warning("Sync search failed for '%s': %s", keyword, exc)
         return _FALLBACK_CATALOG.get("shoes", [])[:limit]
-

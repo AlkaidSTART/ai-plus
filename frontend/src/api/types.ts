@@ -26,10 +26,39 @@ export interface TaskWindow {
 }
 
 export interface TaskCreateRequest {
-  asins: string[]
+  asins?: string[]
+  keyword?: string | null
   platform: 'amazon'
   marketplace: 'US'
   window: TaskWindow
+}
+
+export interface ExtractAsinsRequest {
+  text: string
+}
+
+export interface ExtractAsinsResponse {
+  asins: string[]
+}
+
+export interface ProductItem {
+  asin: string
+  title: string
+  url: string
+  price: string | null
+  rating: number | null
+  review_count: number | null
+  image_url: string | null
+}
+
+export interface SearchProductsRequest {
+  keyword: string
+  limit?: number
+}
+
+export interface SearchProductsResponse {
+  keyword: string
+  products: ProductItem[]
 }
 
 export interface RetryTaskRequest {
