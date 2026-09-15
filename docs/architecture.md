@@ -2,8 +2,8 @@
 
 | 项目 | 说明 |
 | --- | --- |
-| 版本 | V1.0，2026-09-12，云端模型方案 |
-| 状态 | **已确认的目标设计，尚无可运行实现**；当前工作区未初始化前后端、依赖、数据库、模型接入或 CI |
+| 版本 | V1.2，2026-09-14，独立 DOM 爬虫闭环同步 |
+| 状态 | **已有前端脚手架、FastAPI 基础入口、独立单 URL DOM 爬虫与 `infra/` 单机容器基座**；数据库/Redis 应用接入、迁移、Worker 集成、业务 API/SSE、模型接入与 CI 仍未实现 |
 | 需求依据 | 根目录 [PRD.md](../PRD.md) |
 | 决策依据 | [获批 R1 计划](plans/2026-09-12-monorepo-architecture-selection/plan.md) |
 | 文档职责 | 定义 monorepo、选型、模块/运行边界与验证门禁；不代替实施计划或运行测试 |
@@ -19,7 +19,7 @@
 - **P2**：时间切片回测、TikTok/Temu 映射、供应链信号；不同时开工。
 - 证据、租户隔离与真实状态优先于大规模性能优化。云端服务可用性、数据权限、预算、部署区域等须经 M0 验证，不假定账户已开通。
 
-以下目录、组件、接口与测试均为后续实施目标，不是当前已经存在的文件或能力。
+目录树同时展示当前文件和后续目标；未在 README 或对应结果记录中标记落地的组件、接口与测试仍不是当前能力。当前已落地的采集能力仅限独立单 URL DOM 爬虫；它不等于完整评论采集、Worker、LangGraph 或业务 API 已实现。
 
 ## 2. Monorepo 结构与依赖边界
 
@@ -29,8 +29,7 @@ ai-plus/
 ├── AGENTS.md
 ├── README.md
 ├── frontend/
-│   ├── package.json
-│   ├── bun.lock
+│   ├── package.json                # Vue 3 + Vite + TypeScript；Bun + bun.lock
 │   ├── src/
 │   │   ├── app/                    # 启动、路由、全局 provider
 │   │   ├── features/               # tasks、insights、proposals、evidence
@@ -40,8 +39,11 @@ ai-plus/
 ├── backend/
 │   ├── pyproject.toml
 │   ├── uv.lock
+│   ├── README.md
 │   ├── src/insightx/
-│   │   ├── api/                    # HTTP、认证依赖、DTO、SSE
+│   │   ├── main.py                 # FastAPI 应用工厂与模块级 app
+│   │   ├── api/                    # 当前基础路由；认证、DTO、SSE 待实现
+│   │   ├── crawler/                # 单 URL DOM 爬虫、JSON 与 MongoDB 持久化
 │   │   ├── modules/                # tasks/reviews/analysis/reports
 │   │   ├── workflows/              # LangGraph 图与节点
 │   │   ├── integrations/           # 数据供应方与云端模型 API
@@ -53,7 +55,11 @@ ai-plus/
 ├── contracts/
 │   ├── openapi.json                # 从后端导出的契约快照
 │   └── task-events.schema.json     # 从后端事件 DTO 导出的 schema
-├── compose.yaml                    # Linux 容器联调/部署
+├── infra/                          # 当前单机容器部署基座
+│   ├── compose.yaml                # db/redis/api/web 四服务
+│   ├── backend.Dockerfile
+│   ├── frontend.Dockerfile
+│   └── nginx.conf                  # SPA fallback 与 /api 同域代理
 ├── .github/workflows/              # 前端、后端、契约、集成检查
 └── docs/
     ├── architecture.md
@@ -103,7 +109,8 @@ shadcn-vue 组件源码入库、可定制，是当前设计自由度与交付效
 | 项目 | 决策 | 理由与限制 |
 | --- | --- | --- |
 | HTTP 与配置 | Python 3.12、uv、FastAPI、Pydantic 2 / settings | HTTP/校验与 Python 分析生态；具体版本组合需要验证 |
-| 数据库 | PostgreSQL 18 候选基线 + pgvector | 统一关系数据与向量；镜像/扩展组合尚未实际运行验证。[S12] |
+| 数据库 | PostgreSQL 18 候选基线 + pgvector | 任务、评论、报告、证据和事件的业务事实源，也承载向量；镜像/扩展组合尚未实际运行验证。[S12] |
+| 原始采集快照 | Playwright Chromium + MongoDB（`dom_snapshots`） | 已实现独立单 URL CLI：DOM JSON 原子写入本地文件，并将不可变原始 DOM/采集元数据写入 MongoDB；MongoDB 不是第二业务事实源 |
 | 数据访问 | SQLAlchemy 2 + psycopg 3，同步会话起步 | 常规数据库路由使用 `def`；SSE 异步循环将短查询交给线程池。会话在访问单元内创建/关闭，不能并发共享。[S8] |
 | 迁移 | Alembic | 自动生成的是待审候选迁移，必须人工核对并用真实 PostgreSQL 测试。[S9] |
 | 队列 | Celery 5 系列 + Redis broker | 长任务离开 HTTP 请求进程；重投、超时、确认与重复消费必须显式设计。[S7, S10] |
@@ -111,7 +118,7 @@ shadcn-vue 组件源码入库、可定制，是当前设计自由度与交付效
 | 模型 | 云端 LLM/VLM 与独立 Embedding API | Worker 仅调用供应商，不加载 AI 权重；细节见第 6 节 |
 | 聚类 | scikit-learn，CPU 执行 | 消费云端向量，不是本地大模型推理 |
 | 验证 | pytest、Ruff、mypy | 数据库集成、恢复与租户测试使用真实 PostgreSQL，不用 SQLite 代替 |
-| 多模态资产 | P1 使用 S3 兼容对象存储 | P0 文本快照存 PostgreSQL；不提前部署 MinIO，不把图片内容放进 checkpoint |
+| 多模态资产 | P1 使用 S3 兼容对象存储 | P0 结构化文本与业务快照存 PostgreSQL，原始 DOM JSON 存 MongoDB 和本地文件副本；不提前部署 MinIO，不把图片内容放进 checkpoint |
 
 网络采集、云模型调用与等待期间不保持数据库事务；SSE 连接不独占长期数据库会话。全面异步化由连接量与压测决定，不因使用 FastAPI 就假定同步库不会阻塞。
 
@@ -127,12 +134,14 @@ flowchart LR
     Dispatcher --> Redis[(Redis broker)]
     Redis --> Worker[Celery Worker 与 LangGraph]
     Worker --> DB
-    Worker --> Data[已验证的数据来源]
+    Worker --> Crawler[DOM 采集：当前独立 CLI，后续由 Worker 调用]
+    Crawler --> Data[已验证的数据来源]
+    Crawler --> Mongo[(MongoDB 原始 DOM 快照)]
     Worker --> Embed[云端 Embedding API]
     Worker --> AI[云端 LLM 与 P1 VLM API]
 ```
 
-拓扑展示职责，不表示图中组件已经部署。API、Worker、dispatcher 属于同一个模块化后端，而不是三个独立业务服务。
+拓扑展示目标职责，不表示图中组件已经全部部署。当前 Compose 基座只落地 Web、API、DB、Redis 四个容器；API 尚未连接 DB/Redis，Dispatcher、Celery Worker 与 LangGraph 均未部署。后端另已落地独立单 URL DOM 爬虫 CLI，可写本地 JSON 与 MongoDB，但尚未接入 Worker。API、Worker、dispatcher 属于同一个模块化后端，而不是三个独立业务服务。
 
 ### 4.1 提交、派发与执行
 
@@ -140,8 +149,9 @@ flowchart LR
 2. 在一个 PostgreSQL 事务中持久化 task、task_items 与 outbox，再返回 `202 + task_id`。提交成功不代表模型分析已完成。
 3. dispatcher 派发 outbox 到 Celery。数据库与消息 broker 的双写通过 outbox 衔接；发送后崩溃可能造成重发，因此仍必须幂等消费。[S17]
 4. Worker 按单 ASIN 工作单元驱动 LangGraph。尝试编号、执行所有权、心跳、超时与结果条件更新防止重复执行或旧尝试覆盖新结果。
-5. 节点结果、业务报告和有序事件持久化到 PostgreSQL；checkpointer 保存图恢复状态。checkpoint 与业务写入并非天然跨系统原子事务，节点重放必须能识别已完成的副作用。[S11]
-6. 任务取消通过 REST 显式请求，Worker 在节点边界检查；关闭 SSE 或浏览器窗口不是取消。
+5. 采集节点使用 Playwright 获取原始 DOM，将不可变 DOM JSON 快照及采集元数据写入 MongoDB；后续结构化评论、来源与业务输入引用 PostgreSQL 中的业务记录，不使用 MongoDB 替代业务事实源。
+6. 节点结果、业务报告和有序事件持久化到 PostgreSQL；checkpointer 保存图恢复状态。checkpoint 与业务写入并非天然跨系统原子事务，节点重放必须能识别已完成的副作用。[S11]
+7. 任务取消通过 REST 显式请求，Worker 在节点边界检查；关闭 SSE 或浏览器窗口不是取消。
 
 ### 4.2 三类状态不能混用
 
@@ -155,7 +165,9 @@ flowchart LR
 
 ### 4.3 恢复与幂等边界
 
-- PostgreSQL 是任务、报告、证据和事件的事实源；Redis 消息或 Celery 结果不能替代业务表。
+- PostgreSQL 是任务、评论、报告、证据和事件的事实源；Redis 消息、Celery 结果或 MongoDB 原始 DOM 快照均不能替代业务表。
+- 每次爬虫成功生成 UUID `snapshot_id`；MongoDB 文档 `_id` 与 `snapshot_id` 相同，`dom_sha256` 只对规范化 DOM JSON 计算。快照和本地 JSON 文件视为不可变采集产物。
+- PostgreSQL 与 MongoDB 之间没有分布式事务；同一快照 ID、DOM 哈希和后续幂等消费用于对账，不宣称跨库 exactly-once。
 - 使用稳定、与授权工作单元绑定的 graph thread 标识恢复 checkpoint；恢复入口不接受未经授权的任意 thread_id。[S11]
 - Redis 持久化、消息确认、可见性超时、任务限时和失效恢复策略必须联合验证。迟确认不自动带来 exactly-once，某些 Worker 终止方式还涉及额外配置。[S10]
 - 外部调用与写入需要幂等键/既有结果检查；SDK、节点和队列重试共享预算，避免成倍放大云端费用。
@@ -234,8 +246,9 @@ Anthropic 官方说明其不提供自有 Embedding 模型，故独立选择 Embe
 
 ### 8.1 部署目标
 
+- 当前 `infra/compose.yaml` 提供 `db`、`redis`、`api`、`web` 四个单机服务：数据库和 Redis 只在 Compose 网络内访问，API 只在内部暴露 `8000`，Web 通过 Nginx 提供 SPA fallback 并把 `/api/` 代理到 API。`/api/v1/health` 仍返回 `degraded`，因为应用尚未实现数据库和 Redis 探针；四个容器健康不等于业务链路 ready。
 - Docker Compose 的 Linux 容器作为初始联调/部署基线；Celery 官方不支持 Windows 原生，Windows 开发使用 Docker Desktop/WSL2 的 Linux Worker。[S10]
-- API、dispatcher、Worker 使用同版业务包，运行职责分开；前端独立静态构建。数据库和 broker 的存储、权限、备份和恢复另行验证。
+- 目标部署中 API、dispatcher、Worker 使用同版业务包，运行职责分开；前端独立静态构建。数据库和 broker 的存储、权限、备份和恢复另行验证。
 - Compose 的启动顺序不代表 ready，依赖健康检查、迁移完成与应用就绪分别处理；迁移不由每个 API/Worker 实例并发执行。[S9, S19]
 - 先提供结构化日志与 request_id/task_id/item_id、节点耗时、重试和模型用量关联。不默认安装整套可观测平台。
 - 单机 Compose 不提供已验证高可用保证。容器镜像、Redis 等依赖的实际版本、许可证和托管条件在初始化/部署任务中核对。

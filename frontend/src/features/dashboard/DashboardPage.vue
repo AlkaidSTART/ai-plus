@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { Inbox, Sparkles } from '@lucide/vue'
+import { useQueryClient } from '@tanstack/vue-query'
+import { Inbox, Loader2, Sparkles } from '@lucide/vue'
+import { computed, ref, watch } from 'vue'
+import type { NodeProgressPayload, TaskEvent } from '@/api/events.types'
 import EmptyState from '@/components/EmptyState.vue'
 import KpiCard from '@/components/KpiCard.vue'
-import SseTimeline from '@/components/SseTimeline.vue'
+import SseTimeline, { type TimelineNode } from '@/components/SseTimeline.vue'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -12,12 +15,48 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useUiStore } from '@/stores/ui'
+import { useTaskList } from '@/composables/useTasks'
+import { useTaskEvents } from '@/composables/useTaskEvents'
 
-/**
- * 战略决策大盘（PRD 5.1）。
- * 后端就绪前全部区块为空态；KPI 为采样口径，财务熔断 P0 恒「未评估」。
- */
 const ui = useUiStore()
+const queryClient = useQueryClient()
+const { data: taskPage, isLoading: tasksLoading } = useTaskList({ limit: 20 })
+const latestTaskId = computed(() => taskPage.value?.items[0]?.task_id ?? null)
+const timelineNodes = ref<TimelineNode[]>([])
+
+function upsertTimelineNode(event: TaskEvent<NodeProgressPayload>): void {
+  if (event.type !== 'task_item.node_progress') return
+  const payload = event.payload
+  const id = `${event.task_item_id ?? event.task_id}:${payload.node_id}`
+  const node: TimelineNode = {
+    id,
+    name: payload.node_name,
+    status: payload.status,
+    durationMs: payload.duration_ms,
+    note: payload.error?.message ?? payload.skip_reason ?? null,
+  }
+  const index = timelineNodes.value.findIndex((item) => item.id === id)
+  timelineNodes.value =
+    index === -1
+      ? [...timelineNodes.value, node]
+      : timelineNodes.value.map((item, itemIndex) => (itemIndex === index ? node : item))
+}
+
+function onTaskEvent(event: TaskEvent): void {
+  if (event.type === 'task_item.node_progress') {
+    upsertTimelineNode(event as TaskEvent<NodeProgressPayload>)
+    return
+  }
+  void queryClient.invalidateQueries({ queryKey: ['tasks'] })
+}
+
+const { connect } = useTaskEvents(latestTaskId, { onEvent: onTaskEvent })
+
+watch(latestTaskId, (taskId, previousTaskId) => {
+  if (taskId === previousTaskId) return
+  timelineNodes.value = []
+  if (taskId) connect()
+}, { immediate: true })
 </script>
 
 <template>
@@ -44,11 +83,11 @@ const ui = useUiStore()
         <CardHeader>
           <CardTitle class="text-base font-semibold">Agent 执行流</CardTitle>
           <CardDescription>
-            SSE 展示真实节点与每个 ASIN 状态，区分跳过/无数据/失败/取消；断线后按游标回放。
+            SSE 展示真实节点与每个 ASIN 状态，区分跳过/失败/取消；断线后按游标回放。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SseTimeline :nodes="[]" />
+          <SseTimeline :nodes="timelineNodes" />
         </CardContent>
       </Card>
 
@@ -73,11 +112,41 @@ const ui = useUiStore()
         <CardDescription>批次任务与单 ASIN 工作单元状态（含部分失败原因）。</CardDescription>
       </CardHeader>
       <CardContent>
+        <div v-if="tasksLoading" class="flex items-center justify-center py-8">
+          <Loader2 class="size-5 animate-spin text-muted-foreground" />
+        </div>
         <EmptyState
+          v-else-if="!taskPage?.items.length"
           :icon="Inbox"
           title="暂无任务"
           description="点击右上角「新建诊断任务」提交 1-10 个 Amazon US ASIN"
         />
+        <div v-else class="divide-y">
+          <div
+            v-for="task in taskPage.items"
+            :key="task.task_id"
+            class="flex items-center justify-between py-3 text-sm"
+          >
+            <div class="space-y-0.5">
+              <p class="font-medium font-mono text-xs">{{ task.task_id }}</p>
+              <p class="text-muted-foreground text-xs">
+                {{ task.total_items }} 个 ASIN · {{ task.window.preset }} · {{ new Date(task.created_at).toLocaleString() }}
+              </p>
+            </div>
+            <span
+              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="{
+                'bg-yellow-100 text-yellow-800': task.status === 'QUEUED',
+                'bg-blue-100 text-blue-800': task.status === 'RUNNING',
+                'bg-green-100 text-green-800': task.status === 'COMPLETED',
+                'bg-red-100 text-red-800': task.status === 'FAILED',
+                'bg-gray-100 text-gray-800': task.status === 'CANCELED',
+              }"
+            >
+              {{ task.status }}
+            </span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   </div>

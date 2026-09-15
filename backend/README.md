@@ -1,43 +1,75 @@
 # InsightX Backend
 
-InsightX 后端：FastAPI + LangGraph，前后端分离，仅通过 REST + SSE 通信。
+InsightX 后端：FastAPI + LangGraph 目标架构，前后端分离，仅通过 REST + SSE 通信。
 
 ## 环境要求
 
 - Python >= 3.12
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL（需 `pgvector` 扩展）+ Redis（生产路径；本地未启动时应用可运行，`/health` 会如实报告 `degraded`）
+- MongoDB（单 URL DOM 爬虫保存原始快照）
+- Playwright Chromium（单 URL DOM 爬虫的真实浏览器运行时）
 
 ## 启动
 
 ```bash
-cp .env.example .env   # 按需修改
 uv sync
-uv run uvicorn main:app --reload --port 8000
+uv run uvicorn insightx.main:app --reload --port 8000
 ```
 
 - API 文档：http://localhost:8000/docs
 - OpenAPI：http://localhost:8000/openapi.json
 - 健康检查：http://localhost:8000/api/v1/health
 
+## 单 URL DOM 爬虫
+
+安装 Chromium 后运行 CLI：
+
+```bash
+uv run playwright install chromium
+uv run python -m insightx.crawler --url https://example.com
+```
+
+CLI 会使用 Playwright Chromium 访问目标页面，把渲染后的 DOM（按固定规则过滤 script/style/noscript/template 与纯空白文本）递归序列化为 JSON 文件，并将同一快照与采集元数据写入 MongoDB。JSON 默认输出到 `artifacts/dom/`，MongoDB 默认集合为 `dom_snapshots`；`_id` 与返回的 `snapshot_id` 相同。
+
+可用参数：
+
+- `--url`：必填，仅接受绝对 `http://` 或 `https://` URL。
+- `--output-dir`：覆盖 JSON 输出目录。
+- `--headed`：以有界面模式运行 Chromium；默认无头。
+- `--tenant-id`、`--task-id`、`--task-item-id`：写入可选的关联标识。
+
+环境变量模板见根目录示例环境文件；本地覆盖文件由配置自动读取。后端配置变量包括 `DATABASE_URL`、`REDIS_URL`、`AUTH_MODE`、`DEV_TENANT_ID`；爬虫配置变量包括 `MONGODB_URI`、`MONGODB_DATABASE`、`MONGODB_DOM_COLLECTION`、`CRAWLER_OUTPUT_DIR`、`CRAWLER_TIMEOUT_MS`、`CRAWLER_HEADLESS`。
+
 ## 测试
 
 ```bash
 uv run pytest -q
+uv run ruff check .
+uv run mypy src
 ```
 
-测试完全离线，不依赖 PostgreSQL / Redis / 外部 AI 服务。
+离线测试不依赖真实 MongoDB、PostgreSQL、Redis、Chromium 或外部 AI 服务；爬虫测试使用 fake Playwright/Mongo 契约。真实浏览器和 MongoDB 端到端检查需要单独安装 Chromium 并启动 MongoDB。
 
-## 目录结构
+## 当前目录结构
 
 ```text
 backend/
-├── main.py            # FastAPI 入口，唯一挂载 /api/v1 前缀的位置
-├── api/               # 路由、统一响应 Envelope、错误码、依赖
-├── core/              # 配置（pydantic-settings）、Redis client
-├── db/                # async engine / session / Base / models / repositories
-├── runtime/           # Task / Event 存储与运行时
-├── services/          # 业务服务层
-├── agents/            # LangGraph 状态机
-└── tests/             # pytest（离线）
+├── pyproject.toml       # 依赖、构建与工具配置
+├── uv.lock              # uv 锁定依赖
+├── src/insightx/
+│   ├── main.py          # FastAPI 应用工厂与模块级 app
+│   ├── api/
+│   │   ├── router.py    # 聚合路由
+│   │   └── v1/
+│   │       └── health.py
+│   └── crawler/         # Playwright DOM 抓取、JSON 与 MongoDB 持久化
+│       ├── config.py
+│       ├── dom.py
+│       ├── fetch.py
+│       ├── service.py
+│       └── storage.py
+└── tests/               # pytest（离线契约测试）
 ```
+
+MongoDB 爬虫持久化已接入，PostgreSQL 是任务、评论、报告、证据和事件的业务事实源。任务创建、列表、快照、取消、重试、报告、证据和 SSE 传输层已接入，初始 Alembic 迁移会创建业务表。Celery Worker、outbox 派发器和 LangGraph 图尚未接入，因此任务创建后没有执行者写入后续节点或报告，会保持 `QUEUED`；`/health` 在真实探针实施前仍保持 `degraded`。

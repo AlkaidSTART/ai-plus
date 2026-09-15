@@ -2,7 +2,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-from main import create_app
+from insightx.main import create_app
 
 
 @pytest.fixture
@@ -50,9 +50,10 @@ async def test_cors_configured(client):
         headers={"Origin": "http://localhost:5173"},
     )
     assert resp.status_code == 200
+    assert resp.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
-async def test_unknown_route_returns_envelope_error(client):
+async def test_unknown_route_returns_starlette_404(client):
     resp = await client.get("/api/v1/definitely-not-a-route")
     assert resp.status_code == 404
     # Starlette 404 (no route) does not go through ApiError; envelope errors

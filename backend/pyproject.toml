@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "insightx-backend"
 version = "0.1.0"
@@ -7,25 +11,48 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.141.1",
     "langgraph>=1.2.11",
-    "sqlalchemy[asyncio]>=2.0.40",
-    "asyncpg>=0.30.0",
+    "sqlalchemy>=2.0.40",
+    "psycopg[binary]>=3.2",
     "redis>=6.0.0",
     "pydantic-settings>=2.7.0",
     "httpx>=0.28.0",
     "pgvector>=0.4.1",
+    "alembic>=1.20.0",
+    "celery>=5.6.3,<6",
+    "scikit-learn>=1.9.1",
+    "langgraph-checkpoint-postgres>=3.1.2",
+    "anthropic>=1.5.0",
+    "playwright>=1.62.0,<2",
+    "pymongo>=4.18.1,<5",
 ]
-
-[project.optional-dependencies]
-# 本地真实 Embedding（bge-m3）运行时才需要；CI/测试不安装、不下载模型
-embedding = ["sentence-transformers>=5.0"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=1.0.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/insightx"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_unused_ignores = true

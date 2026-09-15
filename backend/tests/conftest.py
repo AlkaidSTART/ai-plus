@@ -1,8 +1,8 @@
-import pytest
 import httpx
+import pytest
 from httpx import ASGITransport
 
-from main import create_app
+from insightx.main import create_app
 
 
 @pytest.fixture
