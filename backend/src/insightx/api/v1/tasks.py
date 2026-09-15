@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -28,6 +28,7 @@ from insightx.schemas import (
     TaskStatus,
 )
 from insightx.services import tasks as task_svc
+from insightx.services.worker import execute_task_pipeline
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -36,6 +37,8 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 def create_task(
     body: TaskCreateRequest,
     idempotency_key: IdempotencyKey,
+    background_tasks: BackgroundTasks,
+    request: Request,
     tenant_id: str = Depends(get_tenant_id),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> SuccessEnvelope[TaskCreatedResponse]:
@@ -45,6 +48,12 @@ def create_task(
         request=body,
         idempotency_key=idempotency_key,
     )
+    if not result.reused and result.status == TaskStatus.QUEUED:
+        background_tasks.add_task(
+            execute_task_pipeline,
+            request.app.state.session_factory,
+            result.task_id,
+        )
     return SuccessEnvelope(data=result)
 
 
@@ -101,6 +110,8 @@ def retry_task(
     task_id: str,
     body: RetryTaskRequest,
     idempotency_key: IdempotencyKey,
+    background_tasks: BackgroundTasks,
+    request: Request,
     tenant_id: str = Depends(get_tenant_id),
     session: Session = Depends(get_session),  # noqa: B008
 ) -> SuccessEnvelope[TaskCreatedResponse]:
@@ -111,6 +122,12 @@ def retry_task(
         request=body,
         idempotency_key=idempotency_key,
     )
+    if not result.reused and result.status == TaskStatus.QUEUED:
+        background_tasks.add_task(
+            execute_task_pipeline,
+            request.app.state.session_factory,
+            result.task_id,
+        )
     return SuccessEnvelope(data=result)
 
 

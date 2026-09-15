@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ImageOff, ListTree, MessageSquareQuote } from '@lucide/vue'
 import EmptyState from '@/components/EmptyState.vue'
 import VChart from '@/components/VChart.vue'
@@ -20,9 +21,48 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useUiStore } from '@/stores/ui'
+import { useTaskDetail, useTaskEvidence, useTaskList, useTaskReport } from '@/composables/useTasks'
 
 /** 多模态评论洞察（PRD 5.2）。实拍画廊为 P1 能力，仅占位说明。 */
 const ui = useUiStore()
+const { data: taskPage } = useTaskList({ limit: 1 })
+const latestTaskId = computed(() => taskPage.value?.items[0]?.task_id ?? null)
+const { data: latestDetail } = useTaskDetail(latestTaskId)
+const firstItemId = computed(() => latestDetail.value?.items[0]?.item_id ?? null)
+const { data: report } = useTaskReport(latestTaskId, firstItemId)
+const { data: evidencePage } = useTaskEvidence(latestTaskId, firstItemId)
+
+const barOption = computed(() => {
+  if (!report.value?.pain_points?.length) return null
+  const labels = report.value.pain_points.map((p) => p.label)
+  const freqs = report.value.pain_points.map((p) => p.actual_frequency ?? 0)
+  return {
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: labels, axisLabel: { interval: 0, rotate: 15 } },
+    yAxis: { type: 'value', name: '频次' },
+    series: [{ type: 'bar', data: freqs, itemStyle: { color: '#3b82f6' } }],
+  }
+})
+
+const radarOption = computed(() => {
+  if (!report.value?.pain_points?.length) return null
+  const indicator = report.value.pain_points.map((p) => ({
+    name: p.label,
+    max: 5,
+  }))
+  const values = report.value.pain_points.map((p) => p.severity_score ?? 1)
+  return {
+    tooltip: {},
+    radar: { indicator },
+    series: [
+      {
+        type: 'radar',
+        data: [{ value: values, name: '严重度评分 (1-5)' }],
+        areaStyle: { opacity: 0.2 },
+      },
+    ],
+  }
+})
 </script>
 
 <template>
@@ -67,10 +107,38 @@ const ui = useUiStore()
         </CardHeader>
         <CardContent>
           <EmptyState
+            v-if="!report?.pain_points?.length"
             :icon="ListTree"
             title="暂无痛点聚类"
             description="完成诊断任务后展示有证据的痛点排行"
           />
+          <div v-else class="space-y-3">
+            <div
+              v-for="(p, idx) in report.pain_points"
+              :key="p.pain_point_id"
+              class="rounded-lg border p-3 text-sm space-y-1 bg-card hover:border-primary/50 transition-colors"
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-sm flex items-center gap-2">
+                  <span class="size-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-bold">
+                    {{ idx + 1 }}
+                  </span>
+                  {{ p.label }}
+                </span>
+                <span
+                  class="text-xs px-2 py-0.5 rounded-full font-medium"
+                  :class="p.severity_level === 'CRITICAL' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'"
+                >
+                  {{ p.severity_level }} ({{ p.severity_score }}分)
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground">{{ p.summary }}</p>
+              <div class="text-[11px] text-muted-foreground flex justify-between pt-1 border-t mt-2">
+                <span>频次：{{ p.actual_frequency }} 次</span>
+                <span>依据证据数：{{ p.evidence_refs.length }} 条</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -87,8 +155,8 @@ const ui = useUiStore()
                 实拍画廊
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="bar" class="animate-in fade-in duration-200"><VChart :option="null" /></TabsContent>
-            <TabsContent value="radar" class="animate-in fade-in duration-200"><VChart :option="null" /></TabsContent>
+            <TabsContent value="bar" class="animate-in fade-in duration-200"><VChart :option="barOption" /></TabsContent>
+            <TabsContent value="radar" class="animate-in fade-in duration-200"><VChart :option="radarOption" /></TabsContent>
             <TabsContent value="gallery" class="animate-in fade-in duration-200">
               <EmptyState
                 :icon="ImageOff"
@@ -108,10 +176,30 @@ const ui = useUiStore()
       </CardHeader>
       <CardContent>
         <EmptyState
+          v-if="!evidencePage?.items?.length"
           :icon="MessageSquareQuote"
           title="暂无评论样本"
           description="任务采集的真实评论将在此可回查"
         />
+        <div v-else class="space-y-3">
+          <div
+            v-for="ev in evidencePage.items"
+            :key="ev.evidence_id"
+            class="rounded-lg border p-4 space-y-2 bg-card text-sm"
+          >
+            <div class="flex items-center justify-between text-xs text-muted-foreground">
+              <span class="font-medium text-foreground">买家真实评论 · {{ ev.source_ref }}</span>
+              <span>⭐ {{ ev.metadata?.rating }} / 5 · {{ ev.published_at ? new Date(ev.published_at).toLocaleDateString() : '' }}</span>
+            </div>
+            <p class="italic text-foreground/90 bg-muted/30 p-2.5 rounded border-l-2 border-primary/60 font-serif">
+              “{{ ev.excerpt }}”
+            </p>
+            <div class="text-[11px] text-muted-foreground flex justify-between">
+              <span>来源：{{ ev.provenance?.source }} ({{ ev.provenance?.capture }})</span>
+              <a :href="ev.source_url ?? undefined" target="_blank" class="text-primary hover:underline">查看对应商品</a>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   </div>

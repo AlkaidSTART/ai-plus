@@ -15,14 +15,34 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { useUiStore } from '@/stores/ui'
-import { useTaskList } from '@/composables/useTasks'
+import { useTaskDetail, useTaskList, useTaskReport } from '@/composables/useTasks'
 import { useTaskEvents } from '@/composables/useTaskEvents'
 
 const ui = useUiStore()
 const queryClient = useQueryClient()
 const { data: taskPage, isLoading: tasksLoading } = useTaskList({ limit: 20 })
 const latestTaskId = computed(() => taskPage.value?.items[0]?.task_id ?? null)
+const { data: latestDetail } = useTaskDetail(latestTaskId)
+const firstItemId = computed(() => latestDetail.value?.items[0]?.item_id ?? null)
+const { data: latestReport } = useTaskReport(latestTaskId, firstItemId)
 const timelineNodes = ref<TimelineNode[]>([])
+
+watch(
+  latestDetail,
+  (detail) => {
+    if (!timelineNodes.value.length && detail?.items[0]?.nodes?.length) {
+      const item = detail.items[0]
+      timelineNodes.value = item.nodes.map((node) => ({
+        id: `${item.item_id}:${node.node_id}`,
+        name: node.node_name,
+        status: node.status,
+        durationMs: node.duration_ms,
+        note: node.error?.message ?? node.skip_reason ?? null,
+      }))
+    }
+  },
+  { immediate: true },
+)
 
 function upsertTimelineNode(event: TaskEvent<NodeProgressPayload>): void {
   if (event.type !== 'task_item.node_progress') return
@@ -72,10 +92,31 @@ watch(latestTaskId, (taskId, previousTaskId) => {
     </div>
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard label="本批监控竞品" :value="null" note="提交诊断任务后统计" :delay-ms="0" />
-      <KpiCard label="实际样本量" :value="null" note="为实际采集样本，非商品总体" :delay-ms="60" />
-      <KpiCard label="有证据痛点数" :value="null" note="最多 5 类，不足不补齐" :delay-ms="120" />
-      <KpiCard label="财务熔断" not-evaluated note="当前不执行财务否决" :delay-ms="180" />
+      <KpiCard
+        label="本批监控竞品"
+        :value="latestDetail?.total_items ?? null"
+        note="提交诊断任务后统计"
+        :delay-ms="0"
+      />
+      <KpiCard
+        label="实际样本量"
+        :value="latestReport?.sample_metrics?.valid_review_count ?? null"
+        note="为实际采集样本，非商品总体"
+        :delay-ms="60"
+      />
+      <KpiCard
+        label="有证据痛点数"
+        :value="latestReport?.pain_points?.length ?? null"
+        note="最多 5 类，不足不补齐"
+        :delay-ms="120"
+      />
+      <KpiCard
+        label="财务熔断"
+        :value="latestReport?.financial_state === 'NOT_EVALUATED' ? '未评估' : latestReport?.financial_state ?? null"
+        :not-evaluated="!latestReport || latestReport?.financial_state === 'NOT_EVALUATED'"
+        note="当前不执行财务否决"
+        :delay-ms="180"
+      />
     </div>
 
     <div class="grid gap-6 xl:grid-cols-3">
@@ -98,10 +139,29 @@ watch(latestTaskId, (taskId, previousTaskId) => {
         </CardHeader>
         <CardContent>
           <EmptyState
+            v-if="!latestReport?.proposals?.length"
             :icon="Sparkles"
             title="暂无推荐"
             description="完成诊断任务并获得有证据的报告后，此处展示推荐项目"
           />
+          <div v-else class="space-y-3">
+            <div
+              v-for="prop in latestReport.proposals"
+              :key="prop.proposal_id"
+              class="rounded-lg border p-3 text-sm space-y-1 bg-card hover:border-primary/50 transition-colors"
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-xs">{{ prop.title }}</span>
+                <span
+                  class="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                  :class="prop.column === 'PRODUCT_OPTIMIZATION' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'"
+                >
+                  {{ prop.column === 'PRODUCT_OPTIMIZATION' ? '本体优化' : '包装履约' }}
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground line-clamp-2">{{ prop.change_description }}</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

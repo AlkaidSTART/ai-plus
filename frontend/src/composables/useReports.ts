@@ -1,4 +1,4 @@
-import { useQueries, useQuery, type UseQueryOptions } from '@tanstack/vue-query'
+import { useQueries, useQuery } from '@tanstack/vue-query'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import {
   getReport,
@@ -6,7 +6,6 @@ import {
   type EvidenceResponse,
   type ListEvidenceParams,
   type Page,
-  type ReportResponse,
 } from '@/api/client'
 
 export interface ReadyReportTarget {
@@ -63,17 +62,16 @@ export function useReadyItemReports(
   targets: MaybeRefOrGetter<ReadyReportTarget[]>,
 ) {
   const readyTargets = computed(() => toValue(targets).filter((item) => item.report_available))
-  const queries = computed<
-    UseQueryOptions<ReportResponse, Error, ReportResponse, readonly unknown[]>[]
-  >(() =>
-    readyTargets.value.map((target) => ({
-      queryKey: reportQueryKey(target.task_id, target.item_id),
-      queryFn: ({ signal }) => getReport(target.task_id, target.item_id, signal),
-      retry: false,
-    })),
-  )
-
-  return useQueries({ queries })
+  return useQueries({
+    queries: computed(() =>
+      readyTargets.value.map((target) => ({
+        queryKey: reportQueryKey(target.task_id, target.item_id),
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          getReport(target.task_id, target.item_id, signal),
+        retry: false,
+      })),
+    ),
+  })
 }
 
 /** 报告引用证据；claim_id 可传 pain_point_id 或 proposal_id。 */
